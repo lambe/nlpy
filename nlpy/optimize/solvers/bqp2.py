@@ -822,8 +822,9 @@ class BQP_new(BQP):
                     # (x, (lower,upper)) = self.to_boundary(x,d,free_vars)
                     nc_dir = np.zeros(n)
                     nc_dir[free_vars] = cg.dir
-                    (x, (lowerTrial,upperTrial)) = self.to_boundary(x,nc_dir,free_vars)
+                    # (x, (lowerTrial,upperTrial)) = self.to_boundary(x,nc_dir,free_vars)
                     # TODO: check if we can replace above step with another projected linesearch
+                    (x, qval, (lowerTrial,upperTrial)) = self.projected_linesearch(x, g, nc_dir, qval, active_set=(lower,upper), backtrack_only=True)                    
                 else:
                     # 4. Update x using projected linesearch with initial step=1.
                     (x, qval, (lowerTrial,upperTrial)) = self.projected_linesearch(x, g, d, qval, active_set=(lower,upper), backtrack_only=True)
