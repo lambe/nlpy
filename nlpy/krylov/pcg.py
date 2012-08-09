@@ -12,7 +12,8 @@ truncated preconditioned conjugate gradient algorithm as described in
 from nlpy.tools.exceptions import UserExitRequest
 from nlpy.tools.utils import NullHandler
 import numpy as np
-import logging, ipdb
+import logging
+# import ipdb
 from math import sqrt
 import sys
 

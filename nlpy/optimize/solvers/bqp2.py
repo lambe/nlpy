@@ -21,7 +21,7 @@ import numpy as np
 import logging
 import warnings
 
-import ipdb
+# import ipdb
 
 __docformat__ = 'restructuredtext'
 
