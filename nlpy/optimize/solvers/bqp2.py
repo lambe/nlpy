@@ -590,6 +590,7 @@ class BQP(object):
             g = qp.grad(x)
             pg = self.pgrad(x, g=g, active_set=(lower,upper))
             pgNorm = np.linalg.norm(pg)
+            cg_total_iter = cg.niter
 
             if pgNorm <= stoptol:
                 exitOptimal = True
@@ -635,13 +636,14 @@ class BQP(object):
                 g = qp.grad(x)
                 pg = self.pgrad(x, g=g, active_set=(lower,upper))
                 pgNorm = np.linalg.norm(pg)
+                cg_total_iter += cg.niter
 
             # Exit if second CG pass results in optimality
             if pgNorm <= stoptol:
                 exitOptimal = True
 
             self.log.info(self.format % (iter, qval,
-                          pgNorm, cg.niter))
+                          pgNorm, cg_total_iter))
 
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter

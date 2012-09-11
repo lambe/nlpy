@@ -211,8 +211,8 @@ class SBMINFramework:
             #     s.t.     ll <= d <= uu
 
             qp = TrustBQPModel(nlp, self.x.copy(), self.TR.Delta, g_k=self.g)
-            if self.iter % 10 == 0:
-                qp.export_qp('qp_iter_2_'+str(self.iter)+'.shv')
+            # if self.iter % 1 == 0:
+            #     qp.export_qp('qp_iter_2_'+str(self.iter)+'.shv')
 
             self.solver = self.TrSolver(qp, qp.grad)
             self.solver.Solve()
@@ -479,6 +479,7 @@ class TrustBQPModel(NLPModel):
         """
         Take the data in the current problem and shelve it for later examination.
         """
+        print 'Exporting QP ...'
         f = shelve.open(file_name)
         f['b'] = self.g_k
         f['Lvar'] = self.Lvar
@@ -491,6 +492,7 @@ class TrustBQPModel(NLPModel):
             A[i] = self.hprod(self.x_k, None, test_vec)
         f['A'] = A
         f.close()
+        print 'Done.'
         return
 
 
