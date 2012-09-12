@@ -552,7 +552,7 @@ class AugmentedLagrangianFramework(object):
             tr = TR(eta1=1.0e-4, eta2=.99, gamma1=.3, gamma2=2.5)
 
             SBMIN = self.innerSolver(self.alprob, tr, TRSolver,
-                                        reltol=self.omega, x0=self.x,
+                                        abstol=self.omega, x0=self.x,
                                         verbose=True,**kwargs)
 
             SBMIN.Solve()
