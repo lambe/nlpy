@@ -550,7 +550,10 @@ class BQP(object):
             # Conjugate gradient phase: explore current face.
 
             # 1. Obtain indices of the free variables.
-            fixed_vars = np.concatenate((lower,upper))
+            # fixed_vars = np.concatenate((lower,upper))
+            on_bound = np.concatenate((lower,upper))
+            zero_grad = where(pg == 0.)
+            fixed_vars = np.intersect1d(on_bound,zero_grad)
             free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
 
             # 2. Construct reduced QP.
@@ -608,7 +611,10 @@ class BQP(object):
                 # by instantiating a new CG object.
                 self.log.debug('Active set and binding set match. Continuing CG.')
 
-                fixed_vars   = np.concatenate((lower,upper))
+                # fixed_vars   = np.concatenate((lower,upper))
+                on_bound = np.concatenate((lower,upper))
+                zero_grad = where(pg == 0.)
+                fixed_vars = np.intersect1d(on_bound,zero_grad)
                 free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
                 ZHZ = ReducedHessian(self.H, free_vars)
                 Zg  = g[free_vars]
