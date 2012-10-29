@@ -11,6 +11,7 @@ from nlpy.tools.exceptions import UserExitRequest
 import numpy as np
 import logging
 import pdb
+import shelve
 from math import sqrt
 from nlpy.model import NLPModel
 from nlpy.krylov.linop import SimpleLinearOperator
@@ -96,7 +97,7 @@ class SBMINFramework:
 
         self.reltol  = kwargs.get('reltol', 1.0e-5)
         self.abstol  = kwargs.get('abstol', 1.0e-7)
-        self.maxiter = kwargs.get('maxiter', 2*self.nlp.n)
+        self.maxiter = kwargs.get('maxiter', max(100,2*self.nlp.n))
         self.verbose = kwargs.get('verbose', True)
         self.total_bqpiter = 0
 
@@ -210,6 +211,8 @@ class SBMINFramework:
             #     s.t.     ll <= d <= uu
 
             qp = TrustBQPModel(nlp, self.x.copy(), self.TR.Delta, g_k=self.g)
+            # if self.iter % 1 == 0:
+            #     qp.export_qp('qp_iter_2_'+str(self.iter)+'.shv')
 
             self.solver = self.TrSolver(qp, qp.grad)
             self.solver.Solve()
@@ -255,6 +258,7 @@ class SBMINFramework:
 
                 # Trust-region step is successful
                 self.TR.UpdateRadius(rho, stepnorm)
+                # self.log.debug('rho = %5.3f, stepnorm = %5.3f' % (rho,stepnorm))
                 self.x = x_trial
                 self.f = f_trial
                 self.g = nlp.grad(self.x)
@@ -470,6 +474,27 @@ class TrustBQPModel(NLPModel):
         self.g_k = kwargs.get('g_k', None)
         if self.g_k == None:
             self.g_k = self.nlp.grad(self.x_k)
+
+    def export_qp(self, file_name):
+        """
+        Take the data in the current problem and shelve it for later examination.
+        """
+        print 'Exporting QP ...'
+        f = shelve.open(file_name)
+        f['b'] = self.g_k
+        f['Lvar'] = self.Lvar
+        f['Uvar'] = self.Uvar
+        A = np.zeros([self.n,self.n])
+        test_vec = np.zeros(self.n)
+        for i in range(self.n):
+            test_vec[i-1] = 0.
+            test_vec[i] = 1.
+            A[i] = self.hprod(self.x_k, None, test_vec)
+        f['A'] = A
+        f.close()
+        print 'Done.'
+        return
+
 
     def obj(self, x, **kwargs):
         """

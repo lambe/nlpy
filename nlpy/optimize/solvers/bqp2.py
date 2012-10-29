@@ -81,18 +81,18 @@ class SufficientDecreaseCG(TruncatedCG):
         s = self.step
         qCur = self.qval
         decrease = self.qOld - qCur
-        Dqnorm = np.linalg.norm(g+self.H*(self.x+s))
+        # Dqnorm = np.linalg.norm(g+self.H*(self.x+s))
         self.log.debug('qCur : %g' % qCur)
 
         projected_xps = np.minimum(self.Uvar, np.maximum(self.Lvar, self.x+s)) 
 
-        if not identical(self.x+s,projected_xps):
-            self.log.debug('CG stops with a constraint violation')
-            raise UserExitRequest
+        # if not identical(self.x+s,projected_xps):
+        #     self.log.debug('CG stops with a constraint violation')
+        #     raise UserExitRequest
 
-        if Dqnorm <= 1e-7*self.g0:
-            self.log.debug('CG stops with a sufficient decrease in the gradient norm')
-            raise UserExitRequest
+        # if Dqnorm <= 1e-7*self.g0:
+        #     self.log.debug('CG stops with a sufficient decrease in the gradient norm')
+        #     raise UserExitRequest
 
         if self.qval <= -1e+25:
             raise UserExitRequest
@@ -550,7 +550,10 @@ class BQP(object):
             # Conjugate gradient phase: explore current face.
 
             # 1. Obtain indices of the free variables.
-            fixed_vars = np.concatenate((lower,upper))
+            # fixed_vars = np.concatenate((lower,upper))
+            on_bound = np.concatenate((lower,upper))
+            zero_grad = where(pg == 0.)
+            fixed_vars = np.intersect1d(on_bound,zero_grad)
             free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
 
             # 2. Construct reduced QP.
@@ -561,7 +564,7 @@ class BQP(object):
 
             cg = SufficientDecreaseCG(Zg, ZHZ, x=x[free_vars], Lvar=qp.Lvar[free_vars], Uvar=qp.Uvar[free_vars], detect_stalling=True)
             try:
-                cg.Solve()
+                cg.Solve(reltol=1.0e-3)
             except UserExitRequest:
                 # CG is no longer making substantial progress.
                 self.log.debug('CG is no longer making substantial progress (%d its)' % cg.niter)
@@ -590,6 +593,7 @@ class BQP(object):
             g = qp.grad(x)
             pg = self.pgrad(x, g=g, active_set=(lower,upper))
             pgNorm = np.linalg.norm(pg)
+            cg_total_iter = cg.niter
 
             if pgNorm <= stoptol:
                 exitOptimal = True
@@ -607,13 +611,16 @@ class BQP(object):
                 # by instantiating a new CG object.
                 self.log.debug('Active set and binding set match. Continuing CG.')
 
-                fixed_vars   = np.concatenate((lower,upper))
+                # fixed_vars   = np.concatenate((lower,upper))
+                on_bound = np.concatenate((lower,upper))
+                zero_grad = where(pg == 0.)
+                fixed_vars = np.intersect1d(on_bound,zero_grad)
                 free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
                 ZHZ = ReducedHessian(self.H, free_vars)
                 Zg  = g[free_vars]
                 s0 = cg.step[:]
                 cg = SufficientDecreaseCG(Zg, ZHZ,  x=x[free_vars], Lvar=qp.Lvar[free_vars], Uvar=qp.Uvar[free_vars], detect_stalling=False)
-                cg.Solve()
+                cg.Solve(reltol=1.0e-3)
 
                 self.log.debug('CG stops after %d its with status=%s.' % (cg.niter,cg.status))
                 d = np.zeros(n)
@@ -635,13 +642,14 @@ class BQP(object):
                 g = qp.grad(x)
                 pg = self.pgrad(x, g=g, active_set=(lower,upper))
                 pgNorm = np.linalg.norm(pg)
+                cg_total_iter += cg.niter
 
             # Exit if second CG pass results in optimality
             if pgNorm <= stoptol:
                 exitOptimal = True
 
             self.log.info(self.format % (iter, qval,
-                          pgNorm, cg.niter))
+                          pgNorm, cg_total_iter))
 
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter
