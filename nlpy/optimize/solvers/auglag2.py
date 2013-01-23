@@ -390,16 +390,16 @@ class AugmentedLagrangianFramework(object):
         if full_mult:
             g = nlp.grad(x)
         else:
-            g = self.dual_feasibility(x)
+            g = self.alprob.dual_feasibility(x)
 
         # Call LSQR method
         lsqr = LSQRFramework(Jred.T)
         lsqr.solve(g[not_on_bound], itnlim=lim, atol=reltol)
         if lsqr.optimal:
             if full_mult:
-                self.pi = lsqr.x.copy()
+                self.alprob.pi = lsqr.x.copy()
             else:
-                self.pi += lsqr.x
+                self.alprob.pi += lsqr.x
 
         return
 
@@ -410,7 +410,10 @@ class AugmentedLagrangianFramework(object):
         tighten feasibility and optimality tolerances
         """
 
-        self.alprob.pi -= self.alprob.rho*convals
+        if self.least_squares_pi:
+            self.least_squares_multipliers(self.x)
+        else:
+            self.alprob.pi -= self.alprob.rho*convals
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
 
