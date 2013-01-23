@@ -8,17 +8,13 @@ from nlpy.optimize.solvers.lsr1 import LSR1
 from nlpy.tools.norms import norm_infty
 from nlpy.tools.timing import cputime
 from nlpy.tools.exceptions import UserExitRequest
+from nlpy.tools.utils import NullHandler
 import numpy as np
 import logging
 from math import sqrt
 from nlpy.model import NLPModel
 
 __docformat__ = 'restructuredtext'
-
-# Dummy NullHandler class for Python 2.6 compatability
-class NullHandler(logging.Handler):
-    def emit(self, record):
-        pass
 
 class SBMINFramework(object):
     """
