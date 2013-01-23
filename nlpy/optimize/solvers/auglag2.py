@@ -376,6 +376,7 @@ class AugmentedLagrangianFramework(object):
         m = nlp.m
         n = nlp.n
         full_mult = kwargs.get('full_mult',False)
+        reltol = kwargs.get('reltol',1.0e-4)
 
         lim = max(2*m,2*n)
         J = nlp.jac(x)
@@ -393,7 +394,7 @@ class AugmentedLagrangianFramework(object):
 
         # Call LSQR method
         lsqr = LSQRFramework(Jred.T)
-        lsqr.solve(g[not_on_bound], itnlim=lim)
+        lsqr.solve(g[not_on_bound], itnlim=lim, atol=reltol)
         if lsqr.optimal:
             if full_mult:
                 self.pi = lsqr.x.copy()

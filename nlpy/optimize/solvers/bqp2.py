@@ -411,8 +411,12 @@ class BQP(object):
         abstol = kwargs.get('abstol', 1.0e-7)
         reltol = kwargs.get('reltol', 1.0e-5)
 
-        # Compute initial data.
+        # Implementation of a "sufficient decrease" stopping condition
+        self.use_q_conv = kwargs.get('use_q_conv',True)
+        self.q_reltol = kwargs.get('q_reltol',1.0e-3)
+        self.best_q_decrease = 0.
 
+        # Compute initial data.
         self.log.debug('q before initial x projection = %7.1e' % qp.obj(qp.x0))
         x = self.project(qp.x0)
         self.log.debug('q after  initial x projection = %7.1e' % qp.obj(x))
@@ -420,6 +424,7 @@ class BQP(object):
         iter = 0
 
         # Compute stopping tolerance.
+        q_old = qp.obj(x)
         g = qp.grad(x)
         pg = self.pgrad(x, g=g, active_set=(lower, upper))
         pgNorm = np.linalg.norm(pg)
@@ -572,6 +577,17 @@ class BQP(object):
                 if pgNorm <= stoptol:
                     self.log.debug('Exiting because residual is small')
                     exitOptimal = True
+
+            q_dec = q_old - qval
+            self.log.debug('qval = %15.10g, q_dec = %15.10g' % (qval,q_dec))
+            if q_dec > self.best_q_decrease:
+                self.best_q_decrease = q_dec
+            q_old = qval
+
+            # Additional optimality check if decrease in q is used as a metric
+            if self.use_q_conv and q_dec < self.q_reltol*self.best_q_decrease:
+                self.log.debug('Exiting because q decrease is small')
+                exitOptimal = True
 
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
             self.log.info(self.format % (iter, qval,
