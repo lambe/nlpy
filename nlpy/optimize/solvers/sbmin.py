@@ -15,6 +15,11 @@ from nlpy.model import NLPModel
 
 __docformat__ = 'restructuredtext'
 
+# Dummy NullHandler class for Python 2.6 compatability
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
 class SBMINFramework(object):
     """
     An abstract framework for a trust-region-based algorithm for the nonlinear
@@ -119,7 +124,10 @@ class SBMINFramework(object):
         # Setup the logger. Install a NullHandler if no output needed.
         logger_name = kwargs.get('logger_name', 'nlpy.sbmin')
         self.log = logging.getLogger(logger_name)
-        self.log.addHandler(logging.NullHandler())
+        try:
+            self.log.addHandler(logging.NullHandler())
+        except:
+            self.log.addHandler(NullHandler())
         if not self.verbose:
             self.log.propagate = False
 
