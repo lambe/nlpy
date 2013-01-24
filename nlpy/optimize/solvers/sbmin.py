@@ -475,7 +475,7 @@ class SBMINPartialLqnFramework(SBMINFramework):
 
 
 
-class SBMINTotalLqnFramework(SBMINFramework):
+class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
     """
     Class SBMINTotalLqnFramework is a subclass of SBMINFramework. The method
     is based on a trust-region-based algorithm for nonlinear box constrained
