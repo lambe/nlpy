@@ -206,6 +206,53 @@ class AugmentedLagrangianPartialLsr1(AugmentedLagrangianPartialQuasiNewton):
 
 
 
+class AugmentedLagrangianTotalQuasiNewton(AugmentedLagrangianPartialQuasiNewton):
+    """
+    Apply a symmetric Quasi Newton approximation to the second order terms of 
+    the Hessian of the augmented Lagrangian and a nonsymmetric Quasi Newton 
+    approximation to the constraint Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianPartialQuasiNewton.__init__(self, nlp, **kwargs)
+
+
+    def jac(self, x, **kwargs):
+        return SimpleLinearOperator(self.n, self.m, symmetric=False,
+                    matvec=lambda u: self.Jacapp.matvec(u,**kwargs),
+                    matvec_transp=lambda u: self.Jacapp.rmatvec(u,**kwargs))
+
+
+    def hprod(self, x, z, v, **kwargs):
+        w = self.Hessapp.matvec(v)
+        J = self.jac(x)
+        w += self.rho * (J.T * (J * v))
+        return w
+
+
+    def jupdate(self, new_x, new_s=None, new_sigma=None, **kwargs):
+        if new_s is not None or new_sigma is not None:
+            self.Jacapp.store(new_x, new_s, new_sigma, **kwargs)
+        return
+
+
+    def jreset(self):
+        self.Jacapp.restart()
+        return
+
+
+
+class AugmentedLagrangianTotalLbfgsAdjBroyB(AugmentedLagrangianTotalQuasiNewton):
+    """
+    Use an LBFGS approximation for the Hessian and adjoint Broyden 
+    approximation B for the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Jacapp = adjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
+            self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+
+
+
 class AugmentedLagrangianFramework(object):
     """
     Solve an NLP using the augmented Lagrangian method. This class is

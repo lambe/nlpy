@@ -432,8 +432,9 @@ class SBMINLqnFramework(SBMINFramework):
         This method updates the limited-memory quasi-Newton Hessian by appending
         the most recent (s,y) pair to it and possibly discarding the oldest one
         if all the memory has been used.
+
+        The update only takes place on *successful* iterations.
         """
-        # Quasi-Newton approximation update on *successful* iterations
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step.copy()
             y = self.g - self.g_old
@@ -461,8 +462,9 @@ class SBMINPartialLqnFramework(SBMINFramework):
         This method updates the limited-memory quasi-Newton Hessian by
         appending the most recent (s,y) pair to it and possibly discarding the
         oldest one if all the memory has been used.
+
+        The update only takes place on *successful* iterations.
         """
-        # Quasi-Newton approximation update on *successful* iterations
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step.copy()
             y = self.lg - self.lg_old
@@ -470,6 +472,37 @@ class SBMINPartialLqnFramework(SBMINFramework):
             #print 's', s
             #print 'y', y
             self.nlp.hupdate(s, y)
+
+
+
+class SBMINTotalLqnFramework(SBMINFramework):
+    """
+    Class SBMINTotalLqnFramework is a subclass of SBMINFramework. The method
+    is based on a trust-region-based algorithm for nonlinear box constrained
+    programming.
+    This class is useful for solving bound-constrained minimization 
+    subproblems derived from penalty methods in which both the problem Hessian 
+    and constraint Jacobian are approximated with quasi-Newton methods.
+    """
+    def __init__(self, nlp, TR, TrSolver, **kwargs):
+        SBMINPartialLqnFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
+
+
+    def PostIteration(self, **kwargs):
+        """
+        This method updates the quasi-Newton approximations by appending
+        the most recent (s,y) pair to it and possibly discarding the oldest one
+        if all the memory has been used.
+
+        The update only takes place on *successful* iterations.
+        """
+        if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
+            s = self.true_step
+            y = self.lg - self.lg_old
+            self.nlp.hupdate(s, y)
+            self.nlp.jupdate(self.x, new_s=s)
+        return
+
 
 
 
