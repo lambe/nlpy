@@ -495,7 +495,6 @@ class AugmentedLagrangianFramework(object):
         reltol = kwargs.get('reltol',1.0e-4)
 
         lim = max(2*m,2*n)
-        pdb.set_trace()
         J = nlp.jac(x)
 
         # Determine which bounds are active to remove appropriate columns of J
@@ -576,9 +575,9 @@ class AugmentedLagrangianFramework(object):
         self.x = self.project(self.x)
 
         # Use a least-squares estimate of the multipliers to start (if requested)
-        if self.least_squares_pi and self.alprob.nlp.m != 0:
-            self.least_squares_multipliers(self.x, full_mult=True)
-            self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
+        # if self.least_squares_pi and self.alprob.nlp.m != 0:
+        #     self.least_squares_multipliers(self.x, full_mult=True)
+        #     self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
 
         # First augmented lagrangian gradient evaluation
         dphi = self.alprob.grad(self.x)
