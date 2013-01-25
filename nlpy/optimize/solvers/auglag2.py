@@ -238,8 +238,8 @@ class AugmentedLagrangianTotalQuasiNewton(AugmentedLagrangianPartialQuasiNewton)
         return
 
 
-    def jreset(self):
-        self.Jacapp.restart()
+    def jreset(self, x):
+        self.Jacapp.restart(x)
         return
 
 
@@ -254,6 +254,7 @@ class AugmentedLagrangianTotalLbfgsAdjBroyA(AugmentedLagrangianTotalQuasiNewton)
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenA(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 
@@ -267,6 +268,7 @@ class AugmentedLagrangianTotalLbfgsAdjBroyB(AugmentedLagrangianTotalQuasiNewton)
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 
@@ -280,6 +282,7 @@ class AugmentedLagrangianTotalLbfgsAdjBroyC(AugmentedLagrangianTotalQuasiNewton)
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenC(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 
@@ -293,6 +296,7 @@ class AugmentedLagrangianTotalLbfgsTR1A(AugmentedLagrangianTotalQuasiNewton):
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = TR1A(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 
@@ -306,6 +310,7 @@ class AugmentedLagrangianTotalLbfgsTR1B(AugmentedLagrangianTotalQuasiNewton):
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = TR1B(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 
@@ -319,6 +324,7 @@ class AugmentedLagrangianTotalLbfgsBroyden(AugmentedLagrangianTotalQuasiNewton):
         self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = Broyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
 
 
 

@@ -51,24 +51,11 @@ class NonsquareQuasiNewton:
         self.x = x              # Keep track of the current point for matvecs
         self.slack_index = kwargs.get('slack_index',n)
 
-        # Initial estimate of approximation, currently work out the full 
-        # matrix using only the matrix-vector product interface
+        # Initial estimate of approximation
         self.A = np.zeros([m,n])
-        if m < n:
-            unitvec = np.zeros(m)
-            for k in range(m):
-                unitvec[k-1] = 0.
-                unitvec[k] = 1.
-                self.A[k,:] = self.jtprod(self.x, unitvec)
-        else:
-            unitvec = np.zeros(n)
-            for k in range(n):
-                unitvec[k-1] = 0.
-                unitvec[k] = 1.
-                self.A[:,k] = self.jprod(self.x, unitvec)
 
-        # Initial constraint values
-        self._vecfunc = self.vecfunc(self.x)
+        # Initial function values (uninitialized at start)
+        self._vecfunc = np.zeros(m)
 
         # Threshold on dot product s's to accept an update of the matrix.
         self.accept_threshold = 1.0e-20
