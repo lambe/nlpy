@@ -12,7 +12,7 @@ truncated preconditioned conjugate gradient algorithm as described in
 from nlpy.tools.exceptions import UserExitRequest
 from nlpy.tools.utils import NullHandler
 import numpy as np
-import logging, ipdb
+import logging
 from math import sqrt
 import sys
 
@@ -68,8 +68,8 @@ class TruncatedCG:
 
         # Formats for display
         self.hd_fmt = ' %-5s  %9s  %8s'
-        self.header = self.hd_fmt % ('Iter', '<r,g>', 'curv')
-        self.fmt = ' %-5d  %9.2e  %8.2e'
+        self.header = self.hd_fmt % ('Iter', 'Residual', 'Curvature')
+        self.fmt = ' %-5d  %9.2e  %9.2e'
 
         # Create a logger for solver.
         self.log = logging.getLogger('nlpy.pcg')
@@ -137,14 +137,17 @@ class TruncatedCG:
         if 's0' in kwargs:
             s = kwargs['s0']
             snorm2 = np.linalg.norm(s)
-            r += H*s                 # r = g + H s0
+            Hs = H * s
+            r += Hs                 # r = g + H s0
+            Hs *= 0.5
+            Hs += g
+            self.qval = np.dot(s, Hs)
         else:
             s = np.zeros(n)
             snorm2 = 0.0
+            self.qval = 0.0
         y = prec(r)
         ry = np.dot(r, y)
-
-        exitOptimal = exitIter = exitUser = False
 
         try:
             sqrtry = sqrt(ry)
@@ -154,6 +157,9 @@ class TruncatedCG:
             raise ValueError, msg
 
         stopTol = max(abstol, reltol * sqrtry)
+
+        exitOptimal = sqrtry <= stopTol
+        exitIter = exitUser = False
 
         # Initialize r as a copy of g not to alter the original g
         if 'p0' in kwargs:
@@ -178,7 +184,7 @@ class TruncatedCG:
             pHp = np.dot(p, Hp)
 
             # if debug:
-            self.log.info(self.fmt % (k, ry, pHp))
+            self.log.info(self.fmt % (k, sqrtry, pHp))
 
             # Compute steplength to the boundary.
             if radius is not None:
@@ -195,6 +201,7 @@ class TruncatedCG:
                 self.status = 'infinite descent'
                 snorm2 = 0
                 self.dir = p
+                self.pHp = pHp
                 infDescent = True
                 continue
 
@@ -206,6 +213,9 @@ class TruncatedCG:
                 self.status = 'trust-region boundary active'
                 onBoundary = True
                 continue
+
+            # Update objective function value.
+            self.qval += alpha * np.dot(r, p) + 0.5 * alpha * alpha * pHp
 
             # Move to next iterate.
             s += alpha * p
@@ -220,10 +230,9 @@ class TruncatedCG:
             else:
                 beta = ry_next/ry
 
-            try:
-                p = -y + beta * p
-            except:
-                pdb.set_trace()
+            #p = -y + beta * p
+            p *= beta
+            p -= y
 
             ry = ry_next
 
@@ -246,7 +255,7 @@ class TruncatedCG:
             self.beta = beta
             self.ry = ry
             self.alpha = alpha
-            self.qval = model_value(H,g,s)
+            #self.qval = model_value(H,g,s)
             self.iter = k
 
             try:
@@ -260,8 +269,8 @@ class TruncatedCG:
 
         # Output info about the last iteration.
         # if debug:
-        self.log.info(self.fmt % (k, ry, pHp))
-        self.log.debug('qval: %6.2e' % model_value(H,g,s))
+        #self.log.info(self.fmt % (k, ry, pHp))
+        #self.log.debug('qval: %6.2e' % self.qval)
         if k < maxiter and not onBoundary and not infDescent and not exitUser:
             self.status = 'residual small'
         elif k >= maxiter:
