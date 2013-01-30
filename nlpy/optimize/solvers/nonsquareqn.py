@@ -96,6 +96,20 @@ class NonsquareQuasiNewton:
                 unitvec[k] = 1.
                 self.A[:,k] = self.jprod(self.x, unitvec)
 
+        # Alternative test 1: A zero Jacobian
+        # Nothing to do
+
+        # Alternative test 2: An identity matrix
+        # for k in range(min(self.m,self.slack_index)):
+        #     self.A[k,k] = 1.
+
+        # # Account for slack variable part of Jacobian (cheap with SlackNLP class)
+        # unitvec = np.zeros(self.n)
+        # for k in range(self.slack_index,self.n):
+        #     unitvec[k-1] = 0.
+        #     unitvec[k] = 1.
+        #     self.A[:,k] = self.jprod(self.x, unitvec)
+
         self._vecfunc = self.vecfunc(self.x)
         return
 
@@ -341,3 +355,43 @@ class TR1B(TR1A):
             JTsigma = self.jtprod(new_x,sigma)
             self.A[:,:slack] += np.outer(yAs, JTsigma[:slack] - ATsigma[:slack]) / denom
         return
+
+
+
+class TR1C(TR1A):
+    """
+    This class implements the TR1 update given in (Schlenkrich et al., 2010) 
+    using the same choice of sigma as in adjointBroydenB above. Therefore, the 
+    directional derivative of the constraints will be correct along both the 
+    step direction and the secant residual direction.
+    """
+
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+        TR1A.__init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs)
+
+
+    def store(self, new_x, new_s):
+        """
+        Store the update given the primal search direction and new point. 
+        Under the current scheme, the cost of this operation is one direct 
+        and one adjoint product with the original matrix plus a function 
+        evaluation.
+        """
+        slack = self.slack_index
+        self.x = new_x
+
+        As = self.matvec(new_s)
+        vecfunc_new = self.vecfunc(new_x)
+        y = vecfunc_new - self._vecfunc
+        self._vecfunc = vecfunc_new
+        sigma = y - As
+
+        Js = self.jprod(new_x, new_s)
+        denom = np.dot(sigma, Js - As)
+        norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(Js - As, Js - As)**0.5)
+        if abs(denom) > self.accept_threshold*norm_prod:
+            ATsigma = self.rmatvec(sigma)
+            JTsigma = self.jtprod(new_x,sigma)
+            self.A[:,:slack] += np.outer(Js - As, JTsigma[:slack] - ATsigma[:slack]) / denom
+        return
+            
