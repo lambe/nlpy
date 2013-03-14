@@ -84,6 +84,7 @@ class SBMINFramework(object):
         self.pgnorm  = None
         self.tsolve = 0.0
         self.true_step = None
+        self.update_on_rejected_step = kwargs.get('update_on_rejected_step', False)
 
         # Options for Nocedal-Yuan backtracking
         self.ny      = kwargs.get('ny', False)
@@ -100,7 +101,7 @@ class SBMINFramework(object):
 
         # Options for non monotone descent strategy
         self.monotone = kwargs.get('monotone', False)
-        self.nIterNonMono = kwargs.get('nIterNonMono', 25)
+        self.nIterNonMono = kwargs.get('nIterNonMono', 10)
 
         self.abstol  = kwargs.get('abstol', 1.0e-7)
         self.reltol  = kwargs.get('reltol', 1.0e-7)
@@ -281,17 +282,20 @@ class SBMINFramework(object):
             if rho >= self.TR.eta1:
 
                 # Trust-region step is successful
+                if self.magic_steps_cons:
+                    g_trial = nlp.grad(x_trial)
+                    m_step = self.magical_step(x_trial, g_trial)
+                    x_trial += m_step
+                    f_trial = nlp.obj(x_trial)
+                    stepnorm = np.linalg.norm(x_trial - self.x)
+                    if f_trial <= self.f:
+                        # Safety check for machine-precision errors in magical step
+                        m = m - (self.f - f_trial)
+
                 self.TR.UpdateRadius(rho, stepnorm)
-                self.x = x_trial
+                self.x = x_trial.copy()
                 self.f = f_trial
                 self.g = nlp.grad(self.x)
-
-                if self.magic_steps_cons:
-                    m_step = self.magical_step(self.x, self.g)
-                    self.x += m_step
-                    self.f = nlp.obj(self.x)
-                    self.g = nlp.grad(self.x)
-
                 self.pgnorm = norm_infty(self.projected_gradient(self.x, self.g))
 
                 step_status = 'Acc'
@@ -338,7 +342,7 @@ class SBMINFramework(object):
                         step_status = 'N-Y Rej'
                     else:
                         # Backtrack succeeded, update the current point
-                        self.x = x_trial
+                        self.x = x_trial.copy()
                         self.f = f_trial
                         self.g = nlp.grad(self.x)
 
@@ -360,19 +364,17 @@ class SBMINFramework(object):
                     # Trust-region step is unsuccessful
                     self.TR.UpdateRadius(rho, stepnorm)
 
-
-
             self.step_status = step_status
             self.radii.append(self.TR.Delta)
             status = ''
 
-            self.true_step = self.x - self.x_old
             if self.save_lg:
                 self.lg = nlp.dual_feasibility(self.x)
 
+            self.true_step = self.x - self.x_old
+
             try:
                 self.PostIteration()
-                #print 'here'
             except UserExitRequest:
                 status = 'usr'
 
@@ -447,7 +449,7 @@ class SBMINPartialLqnFramework(SBMINFramework):
     Class SBMINPartialLqnFramework is a subclass of SBMINFramework. The method
     is based on a trust-region-based algorithm for nonlinear box constrained
     programming.
-    The only difference is that a limited-memory quasi-Newton Hessian
+    The only difference is that a limited-memory Quasi Newton Hessian
     approximation is used and maintained along the iterations. Unlike the
     SBMINLqnFramework class, limited-memory matrix does not approximate the
     first order term in the Hessian, i.e. not the pJ'J term.
@@ -466,12 +468,12 @@ class SBMINPartialLqnFramework(SBMINFramework):
         The update only takes place on *successful* iterations.
         """
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
-            s = self.true_step.copy()
+            s = self.x - self.x_old
             y = self.lg - self.lg_old
-            #print self.x, self.x_old
-            #print 's', s
-            #print 'y', y
             self.nlp.hupdate(s, y)
+        elif self.update_on_rejected_step:
+            s = self.solver.step
+            y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
 
 
 
