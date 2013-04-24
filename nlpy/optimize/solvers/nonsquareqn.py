@@ -129,7 +129,7 @@ class NonsquareQuasiNewton:
         """
         self.numMatVecs += 1
         w = self.jprod(self.x, v, sparse_only=True)
-        w[:self.m_dense] += np.dot(self.A,v[self.n_dense])
+        w[:self.m_dense] += np.dot(self.A,v[:self.n_dense])
         return w
 
 
