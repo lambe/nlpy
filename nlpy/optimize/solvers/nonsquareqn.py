@@ -49,10 +49,15 @@ class NonsquareQuasiNewton:
         self.jtprod = jtprod
         self.vecfunc = vecfunc
         self.x = x              # Keep track of the current point for matvecs
+
+        # Indices to handle sparse parts of the full Jacobian directly
         self.slack_index = kwargs.get('slack_index',n)
+        self.sparse_index = kwargs.get('sparse_index',m)
+        self.m_dense = self.sparse_index
+        self.n_dense = self.slack_index
 
         # Initial estimate of approximation
-        self.A = np.zeros([m,n])
+        self.A = np.zeros([self.m_dense,self.n_dense])
 
         # Initial function values (uninitialized at start)
         self._vecfunc = np.zeros(m)
@@ -82,19 +87,21 @@ class NonsquareQuasiNewton:
         """
         self.x = x
 
-        self.A = np.zeros([self.m,self.n])
-        if self.m < self.n:
+        self.A = np.zeros([self.m_dense,self.n_dense])
+        if self.m_dense < self.n_dense:
             unitvec = np.zeros(self.m)
-            for k in range(self.m):
+            for k in range(self.m_dense):
                 unitvec[k-1] = 0.
                 unitvec[k] = 1.
-                self.A[k,:] = self.jtprod(self.x, unitvec)
+                full_prod = self.jtprod(self.x, unitvec)
+                self.A[k,:] = full_prod[:self.n_dense]
         else:
             unitvec = np.zeros(self.n)
-            for k in range(self.n):
+            for k in range(self.n_dense):
                 unitvec[k-1] = 0.
                 unitvec[k] = 1.
-                self.A[:,k] = self.jprod(self.x, unitvec)
+                full_prod = self.jprod(self.x, unitvec)
+                self.A[:,k] = full_prod[:self.m_dense]
 
         # Alternative test 1: A zero Jacobian
         # Nothing to do
@@ -121,7 +128,9 @@ class NonsquareQuasiNewton:
         very fast for small- and medium-sized dense matrices.
         """
         self.numMatVecs += 1
-        return np.dot(self.A,v)
+        w = self.jprod(self.x, v, sparse_only=True)
+        w[:self.m_dense] += np.dot(self.A,v[self.n_dense])
+        return w
 
 
     def rmatvec(self, w):
@@ -130,14 +139,15 @@ class NonsquareQuasiNewton:
         approximation and the vector w. 
         """
         self.numRMatVecs += 1
-        # return np.dot(self.A.transpose(),w)
-        # The following shortcut is possible provided w stays one-dimensional
-        return np.dot(w,self.A)
+        v = self.jtprod(self.x, w, sparse_only=True)
+        # A dot-product shortcut provided w stays a vector
+        v[:self.n_dense] += np.dot(w[:self.m_dense],self.A)
+        return v
 
 
     def get_full_mat(self):
         """
-        A utility function to return the full matrix.
+        A utility function to return the full (dense part of the) matrix.
         """
         return self.A
 
@@ -166,13 +176,16 @@ class Broyden(NonsquareQuasiNewton):
         one constraint evaluation.
         """
         slack = self.slack_index
+        sparse = self.sparse_index
         s2 = numpy.dot(new_s[:slack],new_s[:slack])
         if s2 > self.accept_threshold:
             vecfunc_new = self.vecfunc(new_x)
             new_y = vecfunc_new - self._vecfunc
-            As = np.dot(self.A[:,:slack], new_s[:slack])
-            yAs = new_y - As
-            self.A[:,:slack] += np.outer(yAs, new_s[:slack]) / s2
+            # As = np.dot(self.A[:,:slack], new_s[:slack])
+            sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+            As = np.dot(self.A, new_s[:slack])
+            yAs = new_y[:sparse] - As - sparse_prod[:sparse]
+            self.A += np.outer(yAs, new_s[:slack]) / s2
             self._vecfunc = vecfunc_new
             self.x = new_x
         return
@@ -202,13 +215,25 @@ class adjointBroydenA(NonsquareQuasiNewton):
         adjoint product with the original matrix.
         """
         self.x = new_x
-        As = self.matvec(new_s)
-        As_true = self.jprod(self.x, new_s)
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        # As = self.matvec(new_s)
+        As = np.dot(self.A,new_s[:slack])
+        # As_true = self.jprod(self.x, new_s)
+        full_prod = self.jprod(self.x, new_s)
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        As_true = full_prod[:sparse] - sparse_prod[:sparse]
+        
         sigma = As_true - As
         sigma2 = numpy.dot(sigma, sigma)
         if sigma2 > self.accept_threshold:
-            ATsigma = self.rmatvec(sigma)
-            ATsigma_true = self.jtprod(self.x, sigma)
+            # ATsigma = self.rmatvec(sigma)
+            ATsigma = np.dot(sigma, self.A)
+            # ATsigma_true = self.jtprod(self.x, sigma)
+            full_prod = self.jtprod(self.x, sigma)
+            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
+            ATsigma_true = full_prod[:sparse] - sparse_prod[:sparse]
             tau = ATsigma_true - ATsigma
             self.A += np.outer(sigma,tau)/sigma2
         return
@@ -232,16 +257,26 @@ class adjointBroydenB(NonsquareQuasiNewton):
         only requires a single adjoint product with the original matrix.
         """
         self.x = new_x
-        As = self.matvec(new_s)
-        # As_true = self.jprod(self.x, new_s)
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        # As = self.matvec(new_s)
+        As = np.dot(self.A, new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
-        new_y = vecfunc_new - self._vecfunc
+        new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        new_y -= sparse_prod
+
         sigma = new_y - As
         sigma2 = numpy.dot(sigma, sigma)
         if sigma2 > self.accept_threshold:
-            ATsigma = self.rmatvec(sigma)
-            ATsigma_true = self.jtprod(self.x, sigma)
+            # ATsigma = self.rmatvec(sigma)
+            ATsigma = np.dot(sigma, self.A)
+            # ATsigma_true = self.jtprod(self.x, sigma)
+            full_prod = self.jtprod(self.x, sigma)
+            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
+            ATsigma_true = full_prod[:sparse] - sparse_prod[:sparse]
             tau = ATsigma_true - ATsigma
             self.A += np.outer(sigma,tau)/sigma2
         return
@@ -266,16 +301,21 @@ class adjointBroydenC(NonsquareQuasiNewton):
         one adjoint product with the original matrix and one constraint 
         evaluation (possibly a repeated call).
         """
-        slack = self.slack_index
         self.x = new_x
+        slack = self.slack_index
+        sparse = self.sparse_index
+
         self._vecfunc = self.vecfunc(new_x)
-        sigma = self._vecfunc
+        sigma = self._vecfunc[:sparse]
         sigma2 = np.dot(sigma,sigma)
         if sigma2 >= self.accept_threshold:
-            mu = self.jtprod(self.x, sigma)
-            ATs = self.rmatvec(sigma)
+            mu = self.jtprod(self.x, self._vecfunc)
+            sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
+            mu -= sparse_prod
+            # ATs = self.rmatvec(sigma)
+            ATs = np.dot(sigma, self.A)
             rho = mu - ATs
-            self.A[:,:slack] += np.outer(sigma, rho[:slack]) / sigma2
+            self.A += np.outer(sigma, rho) / sigma2
         return
 
 
@@ -300,19 +340,28 @@ class TR1A(NonsquareQuasiNewton):
         and one adjoint product with the original matrix.
         """
         slack = self.slack_index
+        sparse = self.sparse_index
         self.x = new_x
 
-        As = self.matvec(new_s)
-        Js = self.jprod(new_x, new_s)
+        # As = self.matvec(new_s)
+        As = np.dot(self.A,new_s[:slack])
+        # Js = self.jprod(new_x, new_s)
+        full_prod = self.jprod(self.x, new_s)
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        Js = full_prod[:sparse] - sparse_prod[:sparse]
         self._vecfunc = self.vecfunc(new_x)
 
-        sigma = self._vecfunc
+        sigma = self._vecfunc[:sparse]
         denom = np.dot(sigma, Js - As)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(Js - As, Js - As)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
-            ATsigma = self.rmatvec(sigma)
-            JTsigma = self.jtprod(new_x,sigma)
-            self.A[:,:slack] += np.outer(Js - As, JTsigma[:slack] - ATsigma[:slack]) / denom
+            # ATsigma = self.rmatvec(sigma)
+            ATsigma = np.dot(sigma, self.A)
+            # JTsigma = self.jtprod(new_x,sigma)
+            full_prod = self.jtprod(self.x, sigma)
+            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
+            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
         return
 
 
@@ -339,21 +388,28 @@ class TR1B(TR1A):
         and one adjoint product with the original matrix.
         """
         slack = self.slack_index
+        sparse = self.sparse_index
         self.x = new_x
 
-        As = self.matvec(new_s)
+        # As = self.matvec(new_s)
+        As = np.dot(self.A, new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         y = vecfunc_new - self._vecfunc
         self._vecfunc = vecfunc_new
-        yAs = y - As
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        yAs = y - As - sparse_prod[:sparse]
 
-        sigma = self._vecfunc
+        sigma = self._vecfunc[:sparse]
         denom = np.dot(sigma, yAs)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(yAs, yAs)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
-            ATsigma = self.rmatvec(sigma)
-            JTsigma = self.jtprod(new_x,sigma)
-            self.A[:,:slack] += np.outer(yAs, JTsigma[:slack] - ATsigma[:slack]) / denom
+            # ATsigma = self.rmatvec(sigma)
+            ATsigma = np.dot(sigma, self.A)
+            # JTsigma = self.jtprod(new_x,sigma)
+            full_prod = self.jtprod(self.x, sigma)
+            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
+            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            self.A += np.outer(yAs, JTsigma - ATsigma) / denom
         return
 
 
@@ -378,20 +434,31 @@ class TR1C(TR1A):
         evaluation.
         """
         slack = self.slack_index
+        sparse = self.sparse_index
         self.x = new_x
 
-        As = self.matvec(new_s)
+        # As = self.matvec(new_s)
+        As = np.dot(self.A,new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         y = vecfunc_new - self._vecfunc
         self._vecfunc = vecfunc_new
-        sigma = y - As
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        sigma = y - As - sparse_prod[:sparse]
 
-        Js = self.jprod(new_x, new_s)
+        # Js = self.jprod(new_x, new_s)
+        full_prod = self.jprod(self.x, new_s)
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        Js = full_prod[:sparse] - sparse_prod[:sparse]
+
         denom = np.dot(sigma, Js - As)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(Js - As, Js - As)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
-            ATsigma = self.rmatvec(sigma)
-            JTsigma = self.jtprod(new_x,sigma)
-            self.A[:,:slack] += np.outer(Js - As, JTsigma[:slack] - ATsigma[:slack]) / denom
+            # ATsigma = self.rmatvec(sigma)
+            ATsigma = np.dot(sigma, self.A)
+            # JTsigma = self.jtprod(new_x,sigma)
+            full_prod = self.jtprod(self.x, sigma)
+            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
+            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
         return
             

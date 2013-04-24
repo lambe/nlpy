@@ -369,7 +369,7 @@ class SlackNLP( MFModel ):
 
         p = np.zeros(m)
 
-        p[:om] = nlp.jprod(x[:on], v[:on])
+        p[:om] = nlp.jprod(x[:on], v[:on], **kwargs)
         p[upperC] *= -1.0
         p[om:om+nrangeC] = p[rangeC]
         p[om:om+nrangeC] *= -1.0
@@ -412,7 +412,7 @@ class SlackNLP( MFModel ):
         vmp[upperC] *= -1.0
         vmp[rangeC] -= v[om:]
 
-        p[:on] = nlp.jtprod(x[:on], vmp)
+        p[:on] = nlp.jtprod(x[:on], vmp, **kwargs)
 
         # Insert contribution of slacks on general constraints
         bot = on;       p[on:on+nlowerC]    = -v[lowerC]
