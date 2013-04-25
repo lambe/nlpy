@@ -23,7 +23,7 @@ from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenC, TR1A, TR1B, TR1C
 from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
-from nlpy.optimize.solvers.nonsquareqn import directBroydenA
+from nlpy.optimize.solvers.nonsquareqn import directBroydenA, mixedBroyden
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.krylov.linop import ReducedLinearOperator
 from nlpy.optimize.tr.trustregion import TrustRegionFramework as TR
@@ -438,6 +438,20 @@ class AugmentedLagrangianTotalLsr1AdjBroyC(AugmentedLagrangianTotalQuasiNewton):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenC(self.nlp.m, self.n, self.x0, self.nlp.cons, 
+            self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
+
+
+
+class AugmentedLagrangianTotalLsr1MixBroy(AugmentedLagrangianTotalQuasiNewton):
+    """
+    Use an LBFGS approximation for the Hessian and adjoint Broyden 
+    approximation B for the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Jacapp = mixedBroyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
 
@@ -1065,6 +1079,14 @@ class AugmentedLagrangianTotalLsr1AdjBroyCFramework(AugmentedLagrangianQuasiNewt
     def __init__(self, nlp, innerSolver, **kwargs):
         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
         self.alprob = AugmentedLagrangianTotalLsr1AdjBroyC(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianTotalLsr1MixBroyFramework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.alprob = AugmentedLagrangianTotalLsr1MixBroy(nlp,**kwargs)
 
 
 

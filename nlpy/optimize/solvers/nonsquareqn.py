@@ -364,7 +364,7 @@ class adjointBroydenB(NonsquareQuasiNewton):
             # JTsigma = self.jtprod(self.x, sigma)
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
-            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
             self.A += np.outer(sigma,tau)/sigma2
         return
@@ -404,6 +404,73 @@ class adjointBroydenC(NonsquareQuasiNewton):
             ATs = np.dot(sigma, self.A)
             rho = mu[:slack] - ATs
             self.A += np.outer(sigma, rho) / sigma2
+        return
+
+
+
+class mixedBroyden(NonsquareQuasiNewton):
+    """
+    This class contains a combination of two updates to the Jacobian. One is 
+    the Broyden-like update in which the search direction s is replaced by the 
+    error in the gradient of the infeasibility function, (direct Broyden A)
+    i.e. (J_{k+1} - A_k)^T h_{k+1}.
+
+    The second is the adjoint Broyden update satisfying the secant condition, 
+    i.e. adjoint Broyden B. In principle, the combination of these two should 
+    work better than each one separately.
+    """
+
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+        NonsquareQuasiNewton.__init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs)
+
+    def store(self, new_x, new_s):
+        """
+        Store the update given the primal search direction new_s and the new 
+        point new_x. Under the current scheme, the cost of this operation is 
+        one constraint evaluation.
+        """
+        self.x = new_x
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        # Part 1: adjoint Broyden B update
+        As = np.dot(self.A, new_s[:slack])
+        vecfunc_new = self.vecfunc(new_x)
+        new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
+        self._vecfunc = vecfunc_new
+        sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        new_y -= sparse_prod[:sparse]
+
+        sigma = new_y - As
+        sigma2 = numpy.dot(sigma, sigma)
+        if sigma2 > self.accept_threshold:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
+            ATsigma = np.dot(sigma, self.A)
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
+            tau = JTsigma - ATsigma
+            self.A += np.outer(sigma,tau)/sigma2
+
+
+        # Part 2: direct Broyden A update
+        ATh = np.dot(self._vecfunc[:sparse],self.A)
+        full_prod = self.jtprod(self.x, self._vecfunc)
+        sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
+        JTh = full_prod[:sparse] - sparse_prod[:sparse]
+
+        rho = JTh - ATh
+        rho2 = numpy.dot(rho,rho)
+        if rho2 > self.accept_threshold:
+            rho_long = np.zeros(self.n)
+            rho_long[:slack] = rho
+            Ar = np.dot(self.A, rho)
+            full_prod = self.jprod(self.x, rho_long)
+            sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
+            Jr = full_prod[:sparse] - sparse_prod[:sparse]
+            pi = Jr - Ar
+            self.A += np.outer(pi,rho)/rho2
         return
 
 
