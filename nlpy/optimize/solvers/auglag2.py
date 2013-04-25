@@ -812,7 +812,7 @@ class AugmentedLagrangianFramework(object):
 
             # Perform bound-constrained minimization
             SBMIN = self.innerSolver(self.alprob, tr, TRSolver,
-                                     reltol=self.omega, x0=self.x,
+                                     abstol=self.omega, x0=self.x,
                                      maxiter=self.max_inner_iter/10., verbose=True,
                                      update_on_rejected_step=self.update_on_rejected_step, **kwargs)
 
