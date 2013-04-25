@@ -253,7 +253,7 @@ class directBroydenA(NonsquareQuasiNewton):
         ATh = np.dot(self._vecfunc[:sparse],self.A)
         full_prod = self.jtprod(self.x, self._vecfunc)
         sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
-        JTh = full_prod[:sparse] - sparse_prod[:sparse]
+        JTh = full_prod[:slack] - sparse_prod[:slack]
 
         rho = JTh - ATh
         rho2 = numpy.dot(rho,rho)
@@ -458,7 +458,7 @@ class mixedBroyden(NonsquareQuasiNewton):
         ATh = np.dot(self._vecfunc[:sparse],self.A)
         full_prod = self.jtprod(self.x, self._vecfunc)
         sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
-        JTh = full_prod[:sparse] - sparse_prod[:sparse]
+        JTh = full_prod[:slack] - sparse_prod[:slack]
 
         rho = JTh - ATh
         rho2 = numpy.dot(rho,rho)
