@@ -192,6 +192,90 @@ class Broyden(NonsquareQuasiNewton):
 
 
 
+class modBroyden(NonsquareQuasiNewton):
+    """
+    This class contains a modification to Broyden's original approximation in 
+    which y is replaced by Js (for true Jacobian J) in the hopes of increasing 
+    the accuracy of the approximation.
+    """
+
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+        NonsquareQuasiNewton.__init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs)
+
+    def store(self, new_x, new_s):
+        """
+        Store the update given the primal search direction new_s and the new 
+        point new_x. Under the current scheme, the cost of this operation is 
+        one constraint evaluation.
+        """
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        s2 = numpy.dot(new_s[:slack],new_s[:slack])
+        if s2 > self.accept_threshold:
+            # vecfunc_new = self.vecfunc(new_x)
+            # new_y = vecfunc_new - self._vecfunc
+            # As = np.dot(self.A[:,:slack], new_s[:slack])
+            sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+            As = np.dot(self.A, new_s[:slack])
+            # yAs = new_y[:sparse] - As - sparse_prod[:sparse]
+            full_prod = self.jprod(self.x, new_s)
+            Js = full_prod[:sparse] - sparse_prod[:sparse]
+
+            self.A += np.outer(Js - As, new_s[:slack]) / s2
+            # self._vecfunc = vecfunc_new
+            self.x = new_x
+        return
+
+
+
+class directBroydenA(NonsquareQuasiNewton):
+    """
+    This class contains a Broyden-like update in which the search direction 
+    s is replaced by the error in the gradient of the infeasibility function, 
+    i.e. (J_{k+1} - A_k)^T h_{k+1}
+    """
+
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+        NonsquareQuasiNewton.__init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs)
+
+    def store(self, new_x, new_s):
+        """
+        Store the update given the primal search direction new_s and the new 
+        point new_x. Under the current scheme, the cost of this operation is 
+        one constraint evaluation.
+        """
+        self.x = new_x
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        self._vecfunc = self.vecfunc(new_x)
+        ATh = np.dot(self._vecfunc[:sparse],self.A)
+        full_prod = self.jtprod(self.x, self._vecfunc)
+        sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
+        JTh = full_prod[:sparse] - sparse_prod[:sparse]
+
+        rho = JTh - ATh
+        rho2 = numpy.dot(rho,rho)
+        if rho2 > self.accept_threshold:
+            rho_long = np.zeros(self.n)
+            rho_long[:slack] = rho
+            # vecfunc_new = self.vecfunc(new_x)
+            # new_y = vecfunc_new - self._vecfunc
+            # As = np.dot(self.A[:,:slack], new_s[:slack])
+            Ar = np.dot(self.A, rho)
+            # yAs = new_y[:sparse] - As - sparse_prod[:sparse]
+            full_prod = self.jprod(self.x, rho_long)
+            sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
+            Jr = full_prod[:sparse] - sparse_prod[:sparse]
+
+            self.A += np.outer(Jr - Ar, rho) / rho2
+            # self._vecfunc = vecfunc_new
+            # self.x = new_x
+        return
+
+
+
 class adjointBroydenA(NonsquareQuasiNewton):
     """
     This class contains an adjoint Broyden approximation to a nonsymmetric 
@@ -224,17 +308,19 @@ class adjointBroydenA(NonsquareQuasiNewton):
         full_prod = self.jprod(self.x, new_s)
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
         As_true = full_prod[:sparse] - sparse_prod[:sparse]
-        
+
         sigma = As_true - As
         sigma2 = numpy.dot(sigma, sigma)
         if sigma2 > self.accept_threshold:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
             # ATsigma = self.rmatvec(sigma)
             ATsigma = np.dot(sigma, self.A)
-            # ATsigma_true = self.jtprod(self.x, sigma)
-            full_prod = self.jtprod(self.x, sigma)
-            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
-            ATsigma_true = full_prod[:sparse] - sparse_prod[:sparse]
-            tau = ATsigma_true - ATsigma
+            # JTsigma = self.jtprod(self.x, sigma)
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
+            tau = JTsigma - ATsigma
             self.A += np.outer(sigma,tau)/sigma2
         return
 
@@ -266,18 +352,20 @@ class adjointBroydenB(NonsquareQuasiNewton):
         new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
-        new_y -= sparse_prod
+        new_y -= sparse_prod[:sparse]
 
         sigma = new_y - As
         sigma2 = numpy.dot(sigma, sigma)
         if sigma2 > self.accept_threshold:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
             # ATsigma = self.rmatvec(sigma)
             ATsigma = np.dot(sigma, self.A)
-            # ATsigma_true = self.jtprod(self.x, sigma)
-            full_prod = self.jtprod(self.x, sigma)
-            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
-            ATsigma_true = full_prod[:sparse] - sparse_prod[:sparse]
-            tau = ATsigma_true - ATsigma
+            # JTsigma = self.jtprod(self.x, sigma)
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            tau = JTsigma - ATsigma
             self.A += np.outer(sigma,tau)/sigma2
         return
 
@@ -314,7 +402,7 @@ class adjointBroydenC(NonsquareQuasiNewton):
             mu -= sparse_prod
             # ATs = self.rmatvec(sigma)
             ATs = np.dot(sigma, self.A)
-            rho = mu - ATs
+            rho = mu[:slack] - ATs
             self.A += np.outer(sigma, rho) / sigma2
         return
 
@@ -355,12 +443,14 @@ class TR1A(NonsquareQuasiNewton):
         denom = np.dot(sigma, Js - As)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(Js - As, Js - As)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
             # ATsigma = self.rmatvec(sigma)
             ATsigma = np.dot(sigma, self.A)
             # JTsigma = self.jtprod(new_x,sigma)
-            full_prod = self.jtprod(self.x, sigma)
-            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
-            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
             self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
         return
 
@@ -394,7 +484,7 @@ class TR1B(TR1A):
         # As = self.matvec(new_s)
         As = np.dot(self.A, new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
-        y = vecfunc_new - self._vecfunc
+        y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
         yAs = y - As - sparse_prod[:sparse]
@@ -403,12 +493,14 @@ class TR1B(TR1A):
         denom = np.dot(sigma, yAs)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(yAs, yAs)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
             # ATsigma = self.rmatvec(sigma)
             ATsigma = np.dot(sigma, self.A)
             # JTsigma = self.jtprod(new_x,sigma)
-            full_prod = self.jtprod(self.x, sigma)
-            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
-            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
             self.A += np.outer(yAs, JTsigma - ATsigma) / denom
         return
 
@@ -440,7 +532,7 @@ class TR1C(TR1A):
         # As = self.matvec(new_s)
         As = np.dot(self.A,new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
-        y = vecfunc_new - self._vecfunc
+        y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
         sigma = y - As - sparse_prod[:sparse]
@@ -453,12 +545,14 @@ class TR1C(TR1A):
         denom = np.dot(sigma, Js - As)
         norm_prod = (np.dot(sigma,sigma)**0.5)*(np.dot(Js - As, Js - As)**0.5)
         if abs(denom) > self.accept_threshold*norm_prod:
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma
             # ATsigma = self.rmatvec(sigma)
             ATsigma = np.dot(sigma, self.A)
             # JTsigma = self.jtprod(new_x,sigma)
-            full_prod = self.jtprod(self.x, sigma)
-            sparse_prod = self.jtprod(self.x, sigma, sparse_only=True)
-            JTsigma = full_prod[:sparse] - sparse_prod[:sparse]
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            JTsigma = full_prod[:slack] - sparse_prod[:slack]
             self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
         return
             

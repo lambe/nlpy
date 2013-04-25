@@ -22,7 +22,8 @@ from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling
 from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenC, TR1A, TR1B, TR1C
-from nlpy.optimize.solvers.nonsquareqn import Broyden
+from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
+from nlpy.optimize.solvers.nonsquareqn import directBroydenA
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.krylov.linop import ReducedLinearOperator
 from nlpy.optimize.tr.trustregion import TrustRegionFramework as TR
@@ -367,6 +368,34 @@ class AugmentedLagrangianTotalLsr1Broyden(AugmentedLagrangianTotalQuasiNewton):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = Broyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
+            self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
+
+
+
+class AugmentedLagrangianTotalLsr1modBroyden(AugmentedLagrangianTotalQuasiNewton):
+    """
+    Use an LBFGS approximation for the Hessian and adjoint Broyden 
+    approximation B for the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Jacapp = modBroyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
+            self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
+
+
+
+class AugmentedLagrangianTotalLsr1DirBroyA(AugmentedLagrangianTotalQuasiNewton):
+    """
+    Use an LBFGS approximation for the Hessian and adjoint Broyden 
+    approximation B for the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Jacapp = directBroydenA(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
 
@@ -996,6 +1025,22 @@ class AugmentedLagrangianTotalLsr1BroydenFramework(AugmentedLagrangianQuasiNewto
     def __init__(self, nlp, innerSolver, **kwargs):
         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
         self.alprob = AugmentedLagrangianTotalLsr1Broyden(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianTotalLsr1modBroydenFramework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.alprob = AugmentedLagrangianTotalLsr1modBroyden(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianTotalLsr1DirBroyAFramework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.alprob = AugmentedLagrangianTotalLsr1DirBroyA(nlp,**kwargs)
 
 
 
