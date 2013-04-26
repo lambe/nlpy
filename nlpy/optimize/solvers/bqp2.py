@@ -275,6 +275,7 @@ class BQP(object):
             slope = np.dot(g, xps - x)
 
         decrease = (q_xps < qval + step * factor * slope)
+        backtrack_only = kwargs.get('backtrack_only',False)
 
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
@@ -294,7 +295,7 @@ class BQP(object):
                 x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
                 q_ok = q_xps
                 q_prev = q_xps
-                while increase and step <= bk_max:
+                while increase and step <= bk_max and not backtrack_only:
                     step *= 3
                     xps = self.project(x + step * d)
                     q_xps = qp.obj(xps)
@@ -511,7 +512,7 @@ class BQP(object):
                 #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
             else:
                 # 4. Update x using projected linesearch with initial step=1.
-                (x, qval) = self.projected_linesearch(x, g, d, qval)
+                (x, qval) = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after first CG pass = %8.2g' % qval)
 
@@ -567,7 +568,7 @@ class BQP(object):
                     #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
                 else:
                     # 4. Update x using projected linesearch with step=1.
-                    (x, qval) = self.projected_linesearch(x, g, d, qval)
+                    (x, qval) = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after second CG pass = %8.2g' % qval)
 
