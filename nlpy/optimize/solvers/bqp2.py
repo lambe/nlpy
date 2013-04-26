@@ -146,6 +146,9 @@ class BQP(object):
         self.format  = '          %-5d  %8.2e  %8.2e  %5d'
         self.format0 = '          %-5d  %8.2e  %8.2e  %5s'
 
+        self.TRconv = kwargs.get('TRconv',False)
+        self.TRradius = kwargs.get('TRradius',0.0)
+
         # Create a logger for solver.
         self.log = logging.getLogger('nlpy.bqp')
         try:
@@ -433,7 +436,7 @@ class BQP(object):
         stoptol = reltol * pgNorm + abstol
         self.log.debug('Main loop with iter=%d and pgNorm=%g' % (iter, pgNorm))
 
-        exitStalling = exitOptimal = exitIter = False
+        exitStalling = exitOptimal = exitIter = exitTR = False
 
         # Print out header and initial log.
         self.log.info(self.hline)
@@ -441,7 +444,7 @@ class BQP(object):
         self.log.info(self.hline)
         self.log.info(self.format0 % (iter, 0.0, pgNorm, ''))
 
-        while not (exitOptimal or exitIter or exitStalling):
+        while not (exitOptimal or exitIter or exitStalling or exitTR):
             x_old = x.copy()
             iter += 1
             if iter >= maxiter:
@@ -592,12 +595,19 @@ class BQP(object):
                 self.log.debug('Exiting because q decrease is small')
                 exitOptimal = True
 
+            # If we are using BQP to solve a trust region subproblem, stop if 
+            # we hit the trust region boundary
+            if self.TRconv and (np.max(np.abs(x)) == self.TRradius):
+                self.log.debug('Exiting because a trust region boundary was hit.')
+                exitTR = True
+
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
             self.log.info(self.format % (iter, qval,
                           pgNorm, cg.niter))
 
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter
+        self.exitTR = exitTR
         self.niter = iter
         self.x = x
         self.qval = qval
