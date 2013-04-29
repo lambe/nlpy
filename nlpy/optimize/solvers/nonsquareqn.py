@@ -418,6 +418,9 @@ class mixedBroyden(NonsquareQuasiNewton):
     The second is the adjoint Broyden update satisfying the secant condition, 
     i.e. adjoint Broyden B. In principle, the combination of these two should 
     work better than each one separately.
+
+    UPDATE: the best form is actually as a least-change update, applying them 
+    concurrently, not consecutively.
     """
 
     def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
@@ -433,7 +436,7 @@ class mixedBroyden(NonsquareQuasiNewton):
         slack = self.slack_index
         sparse = self.sparse_index
 
-        # Part 1: adjoint Broyden B update
+        # Part 1: form adjoint Broyden B update vectors
         As = np.dot(self.A, new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
@@ -451,10 +454,10 @@ class mixedBroyden(NonsquareQuasiNewton):
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
-            self.A += np.outer(sigma,tau)/sigma2
+        #     self.A += np.outer(sigma,tau)/sigma2
 
 
-        # Part 2: direct Broyden A update
+        # Part 2: form direct Broyden A update vectors
         ATh = np.dot(self._vecfunc[:sparse],self.A)
         full_prod = self.jtprod(self.x, self._vecfunc)
         sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
@@ -470,7 +473,15 @@ class mixedBroyden(NonsquareQuasiNewton):
             sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
             Jr = full_prod[:sparse] - sparse_prod[:sparse]
             pi = Jr - Ar
+        #     self.A += np.outer(pi,rho)/rho2
+
+        # Part 3: combined update of A
+        if sigma2 > self.accept_threshold:
+            self.A += np.outer(sigma,tau)/sigma2
+        if rho2 > self.accept_threshold:
             self.A += np.outer(pi,rho)/rho2
+            if sigma2 > self.accept_threshold:
+                self.A -= np.outer(sigma,rho)*np.dot(tau,rho)/rho2/sigma2
         return
 
 
