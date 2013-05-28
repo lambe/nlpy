@@ -375,7 +375,7 @@ class mixedBroyden(NonsquareQuasiNewton):
     work better than each one separately.
 
     This class provides the least-change update, satisfying both the direct 
-    and adjoint tangent conditions concurrently.
+    and adjoint tangent conditions concurrently. ** Still experimental **
     """
 
     def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
