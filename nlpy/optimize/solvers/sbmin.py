@@ -133,8 +133,8 @@ class SBMINFramework(object):
             self.log.addHandler(NullHandler())
         if not self.verbose:
             self.log.propagate = False
-        else:
-            nlp.display_basic_info()
+        # else:
+        #     nlp.display_basic_info()
 
 
     def project(self, x):

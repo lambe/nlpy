@@ -49,17 +49,16 @@ class AugmentedLagrangian(NLPModel):
             self.nlp = SlackNLP(nlp, keep_variable_bounds=True, **kwargs)
         else: self.nlp = nlp
 
+        NLPModel.__init__(self, n=self.nlp.n, m=0, 
+            name='bound-constrained augmented Lagrangian',
+            x0=self.nlp.x0, Lvar=self.nlp.Lvar, Uvar=self.nlp.Uvar)
+
         self.rho_init = kwargs.get('rho_init',10.)
         self.rho = self.rho_init
 
         self.pi0 = np.zeros(self.nlp.m)
         self.pi = self.pi0.copy()
 
-        self.n = self.nlp.n
-        self.m = 0
-        self.Lvar = self.nlp.Lvar
-        self.Uvar = self.nlp.Uvar
-        self.x0 = self.nlp.x0
 
     def obj(self, x, **kwargs):
         """
@@ -72,6 +71,7 @@ class AugmentedLagrangian(NLPModel):
         alfunc += 0.5*self.rho*np.dot(cons,cons)
         return alfunc
 
+
     def grad(self, x, **kwargs):
         """
         Evaluate augmented Lagrangian gradient.
@@ -81,6 +81,7 @@ class AugmentedLagrangian(NLPModel):
         cons = nlp.cons(x)
         algrad = nlp.grad(x) + J.T * ( -self.pi + self.rho * cons)
         return algrad
+
 
     def dual_feasibility(self, x, **kwargs):
         """
