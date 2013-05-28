@@ -412,7 +412,7 @@ class BQP(object):
         reltol = kwargs.get('reltol', 1.0e-5)
 
         # Implementation of a "sufficient decrease" stopping condition
-        self.use_q_conv = kwargs.get('use_q_conv',True)
+        self.use_q_conv = kwargs.get('use_q_conv',False)
         self.q_reltol = kwargs.get('q_reltol',1.0e-3)
         self.best_q_decrease = 0.
 
