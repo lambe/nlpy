@@ -420,7 +420,7 @@ class BQP(object):
         x = self.project(x + bk_min * d)  # To avoid tiny rounding errors.
 
         # Do another projected gradient update
-        (x, (lower, upper)) = self.projected_gradient(x)
+        (x, (lower, upper)) = self.projected_gradient(x, maxiter=1)
 
         return (x, (lower, upper))
 
@@ -473,7 +473,7 @@ class BQP(object):
 
             # Projected-gradient phase: determine next working set.
             (x, (lower, upper)) = self.projected_gradient(x, g=g,
-                                                     active_set=(lower, upper))
+                                                     active_set=(lower, upper), maxiter=1)
             g = qp.grad(x)
             qval = qp.obj(x)
             self.log.debug('q after projected gradient = %8.2g' % qval)
