@@ -630,6 +630,8 @@ class BQP(object):
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
             self.log.info(self.format % (iter, qval, pgNorm, cgiter))
 
+        self.log.info('          Total CG iterations = %d' % (self.cgiter))
+
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter
         self.niter = iter
