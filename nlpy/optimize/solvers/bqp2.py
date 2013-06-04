@@ -290,18 +290,21 @@ class BQP(object):
             slope = np.dot(g, xps - x)
 
         decrease = (q_xps < qval + factor * slope)
-		backtrack_only = kwargs.get('backtrack_only',False)
+        backtrack_only = kwargs.get('backtrack_only',False)
 
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
-            while not decrease and step >= 1.0e-8:
+            while not decrease and step >= max(1.0e-8,bk_min):
                 step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
                 self.log.debug('  Backtracking with step = %7.1e q = %7.1e' % (step, q_xps))
                 slope = np.dot(g, xps - x)
                 decrease = (q_xps < qval + factor * slope)
+            if step < bk_min and step >= 1.0e-8:
+                step = bk_min
+                xps = self.project(x + step * d)
         else:
             # The initial step yields sufficient decrease. See if we can
             # find a larger step with larger decrease.
@@ -366,6 +369,10 @@ class BQP(object):
             active_set = self.get_active_set(x0)
         lower, upper = active_set
 
+        # Project the gradient to avoid zero breakpoints in the projected 
+        # linesearch
+        pg = self.pgrad(x0, g=g, active_set=(lower, upper))
+
         self.log.debug('Entering projected gradient with q = %7.1e' % qval)
 
         x = x0.copy()
@@ -388,7 +395,7 @@ class BQP(object):
                 #print 'step:', initial_steplength
 
 
-            (x, qval, step) = self.projected_linesearch(x, g, -g, qval, step=initial_steplength)
+            (x, qval, step) = self.projected_linesearch(x, g, -pg, qval, step=initial_steplength)
 
             # Check decrease in objective.
             decrease = qOld - qval
