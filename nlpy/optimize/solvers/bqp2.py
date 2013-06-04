@@ -155,6 +155,9 @@ class BQP(object):
         self.format  = '          %-5d  %9.2e  %8.2e  %5d'
         self.format0 = '          %-5d  %9.2e  %8.2e  %5s'
 
+        self.TRconv = kwargs.get('TRconv',False)
+        self.TRradius = kwargs.get('TRradius',0.0)
+
         # Create a logger for solver.
         self.log = logging.getLogger('nlpy.bqp')
         try:
@@ -287,17 +290,21 @@ class BQP(object):
             slope = np.dot(g, xps - x)
 
         decrease = (q_xps < qval + factor * slope)
+        backtrack_only = kwargs.get('backtrack_only',False)
 
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
-            while not decrease and step >= 1.0e-8:
+            while not decrease and step >= max(1.0e-8,bk_min):
                 step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
                 self.log.debug('  Backtracking with step = %7.1e q = %7.1e' % (step, q_xps))
                 slope = np.dot(g, xps - x)
                 decrease = (q_xps < qval + factor * slope)
+            if step < bk_min and step >= 1.0e-8:
+                step = bk_min
+                xps = self.project(x + step * d)
         else:
             # The initial step yields sufficient decrease. See if we can
             # find a larger step with larger decrease.
@@ -362,6 +369,10 @@ class BQP(object):
             active_set = self.get_active_set(x0)
         lower, upper = active_set
 
+        # Project the gradient to avoid zero breakpoints in the projected 
+        # linesearch
+        pg = self.pgrad(x0, g=g, active_set=(lower, upper))
+
         self.log.debug('Entering projected gradient with q = %7.1e' % qval)
 
         x = x0.copy()
@@ -384,7 +395,7 @@ class BQP(object):
                 #print 'step:', initial_steplength
 
 
-            (x, qval, step) = self.projected_linesearch(x, g, -g, qval, step=initial_steplength)
+            (x, qval, step) = self.projected_linesearch(x, g, -pg, qval, step=initial_steplength)
 
             # Check decrease in objective.
             decrease = qOld - qval
@@ -456,7 +467,7 @@ class BQP(object):
         stoptol = reltol * pgNorm + abstol
         self.log.debug('Main loop with iter=%d and pgNorm=%g' % (iter, pgNorm))
 
-        exitStalling = exitOptimal = exitIter = False
+        exitStalling = exitOptimal = exitIter = exitTR = False
 
         # Print out header and initial log.
         self.log.info(self.hline)
@@ -464,7 +475,7 @@ class BQP(object):
         self.log.info(self.hline)
         self.log.info(self.format0 % (iter, 0.0, pgNorm, ''))
 
-        while not (exitOptimal or exitIter or exitStalling):
+        while not (exitOptimal or exitIter or exitStalling or exitTR):
 
             cgiter_1 = 0
             cgiter_2 = 0
@@ -543,7 +554,7 @@ class BQP(object):
                 #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
             else:
                 # 4. Update x using projected linesearch with initial step=1.
-                x, qval, step = self.projected_linesearch(x, g, d, qval)
+                x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after first CG pass = %8.2g' % qval)
 
@@ -601,7 +612,7 @@ class BQP(object):
                     #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
                 else:
                     # 4. Update x using projected linesearch with step=1.
-                    x, qval, step = self.projected_linesearch(x, g, d, qval)
+                    x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after second CG pass = %8.2g' % qval)
 
@@ -625,6 +636,12 @@ class BQP(object):
                 self.log.debug('Exiting because q decrease is small')
                 exitOptimal = True
 
+            # If we are using BQP to solve a trust region subproblem, stop if 
+            # we hit the trust region boundary
+            if self.TRconv and (np.max(np.abs(x)) == self.TRradius):
+                self.log.debug('Exiting because a trust region boundary was hit.')
+                exitTR = True
+
             cgiter = cgiter_1 + cgiter_2  # Total CG iters in this BQP iteration.
             self.cgiter += cgiter         # Total CG iters so far.
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
@@ -634,6 +651,7 @@ class BQP(object):
 
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter
+        self.exitTR = exitTR
         self.niter = iter
         self.x = x
         self.qval = qval
