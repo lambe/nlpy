@@ -26,6 +26,13 @@ import warnings
 
 __docformat__ = 'restructuredtext'
 
+def FormEntireMatrix(on,om,Jop):
+    J = np.zeros([om,on])
+    for i in range(0,on):
+        v = np.zeros(on)
+        v[i] = 1.
+        J[:,i] = Jop * v
+    return J
 
 class SufficientDecreaseCG(TruncatedCG):
     """
@@ -136,15 +143,17 @@ class BQP(object):
         self.cg_reltol = 0.1
 
         # Armijo-style linesearch parameter.
-        self.armijo_factor = 1.0e-4
+        self.armijo_factor = 1.0e-2
+        
+        self.cgiter = 0   # Total number of CG iterations.
 
         self.verbose = kwargs.get('verbose', True)
-        self.hformat = '          %-5s  %8s  %8s  %5s'
+        self.hformat = '          %-5s  %9s  %8s  %5s'
         self.header  = self.hformat % ('Iter', 'q(x)', '|pg(x)|', 'cg')
         self.hlen    = len(self.header)
         self.hline   = '          ' + '-' * self.hlen
-        self.format  = '          %-5d  %8.2e  %8.2e  %5d'
-        self.format0 = '          %-5d  %8.2e  %8.2e  %5s'
+        self.format  = '          %-5d  %9.2e  %8.2e  %5d'
+        self.format0 = '          %-5d  %9.2e  %8.2e  %5s'
 
         self.TRconv = kwargs.get('TRconv',False)
         self.TRradius = kwargs.get('TRradius',0.0)
@@ -244,14 +253,16 @@ class BQP(object):
         d is the search direction, qval is q(x) and
         step is the initial steplength.
         """
+
         check_feasible = kwargs.get('check_feasible', True)
         if check_feasible:
             self.check_feasible(x)
 
         # Check for local optimality.
         tol = 1.0e-6 * np.linalg.norm(x)
-        if np.linalg.norm(self.project(x + d) - x) < tol:
-            return (x, qval)
+
+        if np.linalg.norm(self.project(x + step*d) - x) < tol:
+            return (x, qval, step)
 
         if np.dot(g, d) >= 0:
             raise ValueError('Not a descent direction.')
@@ -260,6 +271,7 @@ class BQP(object):
         factor = self.armijo_factor
 
         self.log.debug('Projected linesearch with initial q = %7.1e' % qval)
+        #print 'Projected linesearch with initial q = %7.1e' % qval
 
         # Obtain stepsize to nearest and farthest breakpoints.
         bk_min, bk_max = self.breakpoints(x, d)
@@ -277,19 +289,19 @@ class BQP(object):
             q_xps = qp.obj(xps)
             slope = np.dot(g, xps - x)
 
-        decrease = (q_xps < qval + step * factor * slope)
-        backtrack_only = kwargs.get('backtrack_only',False)
+        decrease = (q_xps < qval + factor * slope)
+		backtrack_only = kwargs.get('backtrack_only',False)
 
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
             while not decrease and step >= 1.0e-8:
-                step /= 3
+                step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
                 self.log.debug('  Backtracking with step = %7.1e q = %7.1e' % (step, q_xps))
                 slope = np.dot(g, xps - x)
-                decrease = (q_xps < qval + step * factor * slope)
+                decrease = (q_xps < qval + factor * slope)
         else:
             # The initial step yields sufficient decrease. See if we can
             # find a larger step with larger decrease.
@@ -298,26 +310,31 @@ class BQP(object):
                 x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
                 q_ok = q_xps
                 q_prev = q_xps
-                while increase and step <= bk_max and not backtrack_only:
-                    step *= 3
+                while increase and step <= bk_max:
+                    step *= 6
                     xps = self.project(x + step * d)
                     q_xps = qp.obj(xps)
                     self.log.debug('  Extrapolating with step = %7.1e q = %7.1e' % (step, q_xps))
                     slope = np.dot(g, xps - x)
-                    increase = slope < 0 and (q_xps < qval + step * factor * slope) and q_xps <= q_prev
+                    increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
                     if increase:
                         x_ok = xps.copy()
                         q_ok = q_xps
                         q_prev = q_xps
-                xps = x_ok
+                xps = x_ok.copy()
                 q_xps = q_ok
         q_xps = qp.obj(xps)
+
         if q_xps>qval:
             xps = x.copy()
             q_xps = qval
         self.log.debug('Projected linesearch ends with q = %7.1e' % q_xps)
+        #print 'step:', step
+        #print 'q_xps', q_xps
+        #print 'x:', xps
+        #print 'Projected linesearch ends with q = %7.1e' % q_xps
 
-        return (xps, q_xps)
+        return (xps, q_xps, step)
 
     def projected_gradient(self, x0, g=None, active_set=None, qval=None, **kwargs):
         """
@@ -362,9 +379,16 @@ class BQP(object):
 
             iter += 1
             qOld = qval
-
             # TODO: Use appropriate initial steplength.
-            (x, qval) = self.projected_linesearch(x, g, -g, qval)
+            if iter==1:
+                initial_steplength = 1.0
+            else:
+                #print 'step:', step
+                initial_steplength = step
+                #print 'step:', initial_steplength
+
+
+            (x, qval, step) = self.projected_linesearch(x, g, -g, qval, step=initial_steplength)
 
             # Check decrease in objective.
             decrease = qOld - qval
@@ -402,7 +426,7 @@ class BQP(object):
         x = self.project(x + bk_min * d)  # To avoid tiny rounding errors.
 
         # Do another projected gradient update
-        (x, (lower, upper)) = self.projected_gradient(x)
+        (x, (lower, upper)) = self.projected_gradient(x, maxiter=1)
 
         return (x, (lower, upper))
 
@@ -416,7 +440,7 @@ class BQP(object):
         reltol = kwargs.get('reltol', 1.0e-5)
 
         # Implementation of a "sufficient decrease" stopping condition
-        self.use_q_conv = kwargs.get('use_q_conv',True)
+        self.use_q_conv = kwargs.get('use_q_conv',False)
         self.q_reltol = kwargs.get('q_reltol',1.0e-3)
         self.best_q_decrease = 0.
 
@@ -445,15 +469,21 @@ class BQP(object):
         self.log.info(self.format0 % (iter, 0.0, pgNorm, ''))
 
         while not (exitOptimal or exitIter or exitStalling or exitTR):
+
+            cgiter_1 = 0
+            cgiter_2 = 0
+
             x_old = x.copy()
             iter += 1
+
+            #print 'iter:', iter
             if iter >= maxiter:
                 exitIter = True
                 continue
 
             # Projected-gradient phase: determine next working set.
             (x, (lower, upper)) = self.projected_gradient(x, g=g,
-                                                     active_set=(lower, upper))
+                                                     active_set=(lower, upper), maxiter=1)
             g = qp.grad(x)
             qval = qp.obj(x)
             self.log.debug('q after projected gradient = %8.2g' % qval)
@@ -473,7 +503,8 @@ class BQP(object):
             # fixed_vars = np.concatenate((lower, upper))
             on_bound = np.concatenate((lower,upper))
             zero_grad = where(pg == 0.)
-            fixed_vars = np.intersect1d(on_bound,zero_grad)
+            #fixed_vars = np.intersect1d(on_bound,zero_grad)
+            fixed_vars = np.concatenate((lower, upper))
             free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
 
             # 2. Construct reduced QP.
@@ -497,6 +528,7 @@ class BQP(object):
             # because its original stopping test was triggered.
             msg = 'CG stops (%d its, status = %s)' % (cg.niter, cg.status)
             self.log.debug(msg)
+            cgiter_1 = cg.niter
 
             # 3. Expand search direction.
             d = np.zeros(n)
@@ -515,7 +547,7 @@ class BQP(object):
                 #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
             else:
                 # 4. Update x using projected linesearch with initial step=1.
-                (x, qval) = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
+                x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after first CG pass = %8.2g' % qval)
 
@@ -528,6 +560,7 @@ class BQP(object):
                 self.log.debug('Exiting because residual is small')
                 self.log.info(self.format % (iter, qval,
                               pgNorm, cg.niter))
+                self.cgiter += cg.niter
                 continue
 
             # Compare active set to binding set.
@@ -542,8 +575,8 @@ class BQP(object):
 
                 on_bound = np.concatenate((lower,upper))
                 zero_grad = where(pg == 0.)
-                fixed_vars = np.intersect1d(on_bound,zero_grad)
-                # fixed_vars = np.concatenate((lower, upper))
+                #fixed_vars = np.intersect1d(on_bound,zero_grad)
+                fixed_vars = np.concatenate((lower, upper))
                 free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
                 ZHZ = ReducedHessian(self.H, free_vars)
                 Zg  = g[free_vars]
@@ -555,6 +588,7 @@ class BQP(object):
 
                 msg = 'CG stops (%d its, status = %s)' % (cg.niter, cg.status)
                 self.log.debug(msg)
+                cgiter_2 = cg.niter
 
                 d = np.zeros(n)
                 d[free_vars] = cg.step
@@ -571,7 +605,7 @@ class BQP(object):
                     #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
                 else:
                     # 4. Update x using projected linesearch with step=1.
-                    (x, qval) = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
+                    x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
                 self.log.debug('q after second CG pass = %8.2g' % qval)
 
@@ -601,9 +635,12 @@ class BQP(object):
                 self.log.debug('Exiting because a trust region boundary was hit.')
                 exitTR = True
 
+            cgiter = cgiter_1 + cgiter_2  # Total CG iters in this BQP iteration.
+            self.cgiter += cgiter         # Total CG iters so far.
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
-            self.log.info(self.format % (iter, qval,
-                          pgNorm, cg.niter))
+            self.log.info(self.format % (iter, qval, pgNorm, cgiter))
+
+        self.log.info('          Total CG iterations = %d' % (self.cgiter))
 
         self.exitOptimal = exitOptimal
         self.exitIter = exitIter
