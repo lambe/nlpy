@@ -251,7 +251,7 @@ class TrustRegionBQP(TrustRegionSolver):
     def __init__(self, bqp, g, **kwargs):
 
         TrustRegionSolver.__init__(self, g, **kwargs)
-        self.bqpSolver = BQP(bqp, TRconv=True, TRradius=bqp.delta, **kwargs)
+        self.bqpSolver = BQP(bqp, **kwargs)
         self.niter = 0
         self.stepNorm = 0.0
         self.step = None

@@ -295,16 +295,16 @@ class BQP(object):
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
-            while not decrease and step >= max(1.0e-8,bk_min):
+            while not decrease and step >= 1.0e-8:
                 step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
                 self.log.debug('  Backtracking with step = %7.1e q = %7.1e' % (step, q_xps))
                 slope = np.dot(g, xps - x)
                 decrease = (q_xps < qval + factor * slope)
-            if step < bk_min and step >= 1.0e-8:
-                step = bk_min
-                xps = self.project(x + step * d)
+            # if step < bk_min and step >= 1.0e-8:
+            #     step = bk_min
+            #     xps = self.project(x + step * d)
         else:
             # The initial step yields sufficient decrease. See if we can
             # find a larger step with larger decrease.
