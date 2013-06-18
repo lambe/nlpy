@@ -258,23 +258,37 @@ class BQP(object):
         if check_feasible:
             self.check_feasible(x)
 
-        # Check for local optimality.
-        tol = 1.0e-6 * np.linalg.norm(x)
-
-        if np.linalg.norm(self.project(x + step*d) - x) < tol:
-            return (x, qval, step)
-
         if np.dot(g, d) >= 0:
             raise ValueError('Not a descent direction.')
 
         qp = self.qp
         factor = self.armijo_factor
 
-        self.log.debug('Projected linesearch with initial q = %7.1e' % qval)
-        #print 'Projected linesearch with initial q = %7.1e' % qval
-
         # Obtain stepsize to nearest and farthest breakpoints.
         bk_min, bk_max = self.breakpoints(x, d)
+
+        # if bk_min <= 0.0:
+        #     raise ValueError('First breakpoint is zero.')
+
+        # Check for local optimality.
+        tol = 1.0e-6 * np.linalg.norm(x)
+
+        if np.linalg.norm(self.project(x + step*d) - x) < tol:
+            # Update the active set in case the projected point is better
+            x_new = self.project(x + step*d)
+            q_new = qp.obj(x_new)
+            if q_new > qval:
+                # If the projected point is worse, take the first local min,
+                # up to the first breakpoint (interpolation to be added)
+                # bk_min, bk_max = self.breakpoints(x, d)
+                x_new = self.project(x + bk_min*d)
+                q_new = qp.obj(x_new)
+                step = bk_min
+            self.log.debug('Local optimality detected, exiting with q = %7.12e.' % q_new)
+            return (x_new, q_new, step)
+
+        self.log.debug('Projected linesearch with initial q = %7.12e' % qval)
+        #print 'Projected linesearch with initial q = %7.1e' % qval
 
         if kwargs.get('use_bk_min', False):
             step = bk_min
@@ -295,16 +309,32 @@ class BQP(object):
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
-            while not decrease and step >= 1.0e-8:
+            while not decrease and step >= max(1.e-12,bk_min):
                 step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
-                self.log.debug('  Backtracking with step = %7.1e q = %7.1e' % (step, q_xps))
+                self.log.debug('  Backtracking with step = %7.1e q = %7.12e' % (step, q_xps))
+                # self.log.debug('  Target q = %7.12e' % (qval + factor*slope))
                 slope = np.dot(g, xps - x)
                 decrease = (q_xps < qval + factor * slope)
-            # if step < bk_min and step >= 1.0e-8:
-            #     step = bk_min
-            #     xps = self.project(x + step * d)
+            # end while
+            if step < bk_min:
+                # Quadratic interpolation to find best point
+                x_bk = self.project(x + bk_min * d)
+                q_bk = qp.obj(x_bk)
+                slope = np.dot(g, d) / np.linalg.norm(d)
+                a = (q_bk - qval - slope*bk_min)/bk_min**2
+                step_opt = -slope/2/a
+                if a > 0 and step_opt < bk_min:
+                    step = step_opt
+                    xps = self.project(x + step * d)
+                    q_xps = qp.obj(xps)
+                else:
+                    step = bk_min
+                    xps = self.project(x + bk_min * d)
+                    q_xps = qp.obj(xps)
+                # end if
+            # end if
         else:
             # The initial step yields sufficient decrease. See if we can
             # find a larger step with larger decrease.
@@ -317,7 +347,7 @@ class BQP(object):
                     step *= 6
                     xps = self.project(x + step * d)
                     q_xps = qp.obj(xps)
-                    self.log.debug('  Extrapolating with step = %7.1e q = %7.1e' % (step, q_xps))
+                    self.log.debug('  Extrapolating with step = %7.1e q = %7.12e' % (step, q_xps))
                     slope = np.dot(g, xps - x)
                     increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
                     if increase:
@@ -328,10 +358,10 @@ class BQP(object):
                 q_xps = q_ok
         q_xps = qp.obj(xps)
 
-        if q_xps>qval:
+        if q_xps > qval:
             xps = x.copy()
             q_xps = qval
-        self.log.debug('Projected linesearch ends with q = %7.1e' % q_xps)
+        self.log.debug('Projected linesearch ends with q = %7.12e' % q_xps)
         #print 'step:', step
         #print 'q_xps', q_xps
         #print 'x:', xps
@@ -371,7 +401,7 @@ class BQP(object):
 
         # Project the gradient to avoid zero breakpoints in the projected 
         # linesearch
-        pg = self.pgrad(x0, g=g, active_set=(lower, upper))
+        # pg = self.pgrad(x0, g=g, active_set=(lower, upper))
 
         self.log.debug('Entering projected gradient with q = %7.1e' % qval)
 
@@ -395,7 +425,7 @@ class BQP(object):
                 #print 'step:', initial_steplength
 
 
-            (x, qval, step) = self.projected_linesearch(x, g, -pg, qval, step=initial_steplength)
+            (x, qval, step) = self.projected_linesearch(x, g, -g, qval, step=initial_steplength)
 
             # Check decrease in objective.
             decrease = qOld - qval
@@ -454,7 +484,7 @@ class BQP(object):
         # Compute initial data.
         self.log.debug('q before initial x projection = %7.1e' % qp.obj(qp.x0))
         x = self.project(qp.x0)
-        self.log.debug('q after  initial x projection = %7.1e' % qp.obj(x))
+        self.log.debug('q after  initial x projection = %7.12e' % qp.obj(x))
         lower, upper = self.get_active_set(x)
         iter = 0
 
@@ -490,10 +520,10 @@ class BQP(object):
 
             # Projected-gradient phase: determine next working set.
             (x, (lower, upper)) = self.projected_gradient(x, g=g,
-                                                     active_set=(lower, upper), maxiter=1)
+                                                     active_set=(lower, upper))
             g = qp.grad(x)
             qval = qp.obj(x)
-            self.log.debug('q after projected gradient = %8.2g' % qval)
+            self.log.debug('q after projected gradient = %8.12g' % qval)
             pg = self.pgrad(x, g=g, active_set=(lower, upper))
             pgNorm = np.linalg.norm(pg)
 
@@ -556,7 +586,7 @@ class BQP(object):
                 # 4. Update x using projected linesearch with initial step=1.
                 x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
 
-                self.log.debug('q after first CG pass = %8.2g' % qval)
+                self.log.debug('q after first CG pass = %8.12g' % qval)
 
             g = qp.grad(x)
             pg = self.pgrad(x, g=g) #, active_set=(lower, upper))
@@ -613,8 +643,9 @@ class BQP(object):
                 else:
                     # 4. Update x using projected linesearch with step=1.
                     x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
+                    lower, upper = self.get_active_set(x)
 
-                self.log.debug('q after second CG pass = %8.2g' % qval)
+                self.log.debug('q after second CG pass = %8.12g' % qval)
 
                 g = qp.grad(x)
                 pg = self.pgrad(x, g=g, active_set=(lower, upper))
