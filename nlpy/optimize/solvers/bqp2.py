@@ -284,10 +284,21 @@ class BQP(object):
             if q_new > qval:
                 # If the projected point is worse, take the first local min,
                 # up to the first breakpoint (interpolation to be added)
-                # bk_min, bk_max = self.breakpoints(x, d)
-                x_new = self.project(x + bk_min*d)
-                q_new = qp.obj(x_new)
+                x_bk = self.project(x + bk_min*d)
+                q_bk = qp.obj(x_new)
                 step = bk_min
+                slope = np.dot(g, d) / np.linalg.norm(d)
+                a = (q_bk - qval - slope*bk_min)/bk_min**2
+                step_opt = -slope/2/a
+                if a > 0 and step_opt < bk_min:
+                    step = step_opt
+                    x_new = self.project(x + step * d)
+                    q_new = qp.obj(x_new)
+                else:
+                    step = bk_min
+                    xps = x_bk
+                    q_xps = q_bk
+                # end if
             self.log.debug('Local optimality detected, exiting with q = %7.12e.' % q_new)
             return (x_new, q_new, step)
 
