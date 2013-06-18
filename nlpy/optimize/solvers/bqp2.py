@@ -258,6 +258,10 @@ class BQP(object):
         if check_feasible:
             self.check_feasible(x)
 
+        if np.linalg.norm(d) == 0.:
+            self.log.debug('Zero search direction given, exiting immediately.')
+            return (x, qval, step)
+
         if np.dot(g, d) >= 0:
             raise ValueError('Not a descent direction.')
 
@@ -267,8 +271,8 @@ class BQP(object):
         # Obtain stepsize to nearest and farthest breakpoints.
         bk_min, bk_max = self.breakpoints(x, d)
 
-        # if bk_min <= 0.0:
-        #     raise ValueError('First breakpoint is zero.')
+        if bk_min <= 0.0:
+            raise ValueError('First breakpoint is zero.')
 
         # Check for local optimality.
         tol = 1.0e-6 * np.linalg.norm(x)
@@ -309,7 +313,7 @@ class BQP(object):
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
             # until a successful step is found.
-            while not decrease and step >= max(1.e-12,bk_min):
+            while not decrease and step >= bk_min:
                 step /= 6
                 xps = self.project(x + step * d)
                 q_xps = qp.obj(xps)
@@ -401,7 +405,7 @@ class BQP(object):
 
         # Project the gradient to avoid zero breakpoints in the projected 
         # linesearch
-        # pg = self.pgrad(x0, g=g, active_set=(lower, upper))
+        pg = self.pgrad(x0, g=g, active_set=(lower, upper))
 
         self.log.debug('Entering projected gradient with q = %7.1e' % qval)
 
@@ -417,15 +421,20 @@ class BQP(object):
             iter += 1
             qOld = qval
             # TODO: Use appropriate initial steplength.
-            if iter==1:
-                initial_steplength = 1.0
-            else:
-                #print 'step:', step
-                initial_steplength = step
-                #print 'step:', initial_steplength
+            # if iter==1:
+            #     initial_steplength = 1.0
+            # else:
+            #     #print 'step:', step
+            #     initial_steplength = step
+            #     #print 'step:', initial_steplength
 
+            # Update the gradient on later iterations
+            if iter != 1:
+                g = self.qp.grad(x)
+                # A projection to avoid zero gradients in the line search
+                pg = self.pgrad(x, g=g, active_set=(lower,upper))
 
-            (x, qval, step) = self.projected_linesearch(x, g, -g, qval, step=initial_steplength)
+            (x, qval, step) = self.projected_linesearch(x, g, -pg, qval)
 
             # Check decrease in objective.
             decrease = qOld - qval
@@ -463,7 +472,10 @@ class BQP(object):
         x = self.project(x + bk_min * d)  # To avoid tiny rounding errors.
 
         # Do another projected gradient update
-        (x, (lower, upper)) = self.projected_gradient(x, maxiter=1)
+        # (x, (lower, upper)) = self.projected_gradient(x, maxiter=1)
+
+        # Do another Cauchy point calculation
+
 
         return (x, (lower, upper))
 
@@ -490,6 +502,7 @@ class BQP(object):
 
         # Compute stopping tolerance.
         q_old = qp.obj(x)
+        qval = q_old
         g = qp.grad(x)
         pg = self.pgrad(x, g=g, active_set=(lower, upper))
         pgNorm = np.linalg.norm(pg)
@@ -519,11 +532,16 @@ class BQP(object):
                 continue
 
             # Projected-gradient phase: determine next working set.
-            (x, (lower, upper)) = self.projected_gradient(x, g=g,
-                                                     active_set=(lower, upper))
+            # (x, (lower, upper)) = self.projected_gradient(x, g=g,
+            #                                          active_set=(lower, upper))
+
+            # Get an approximate Cauchy point for the problem
+            x, qval, step = self.projected_linesearch(x, g, -pg, qval)
+            lower, upper = self.get_active_set(x)
+
             g = qp.grad(x)
-            qval = qp.obj(x)
-            self.log.debug('q after projected gradient = %8.12g' % qval)
+            # qval = qp.obj(x)
+            self.log.debug('q after Cauchy point calculation = %8.12g' % qval)
             pg = self.pgrad(x, g=g, active_set=(lower, upper))
             pgNorm = np.linalg.norm(pg)
 
@@ -579,12 +597,12 @@ class BQP(object):
                 nc_dir = np.zeros(n)
                 nc_dir[free_vars] = cg.dir
                 # pdb.set_trace()
-                (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
-                qval = qp.obj(x)
-                #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
+                # (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
+                # qval = qp.obj(x)
+                x, qval, step = self.projected_linesearch(x, g, nc_dir, qval) # use_bk_min?
             else:
                 # 4. Update x using projected linesearch with initial step=1.
-                x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
+                x, qval, step = self.projected_linesearch(x, g, d, qval)
 
                 self.log.debug('q after first CG pass = %8.12g' % qval)
 
@@ -637,16 +655,16 @@ class BQP(object):
 
                     nc_dir = np.zeros(n)
                     nc_dir[free_vars] = cg.dir
-                    (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
-                    qval = qp.obj(x)
-                    #(x, qval) = self.projected_linesearch(x, g, d, qval, use_bk_min=True)
+                    # (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
+                    # qval = qp.obj(x)
+                    x, qval, step = self.projected_linesearch(x, g, d, qval) # use_bk_min?
                 else:
                     # 4. Update x using projected linesearch with step=1.
-                    x, qval, step = self.projected_linesearch(x, g, d, qval, backtrack_only=True)
-                    lower, upper = self.get_active_set(x)
+                    x, qval, step = self.projected_linesearch(x, g, d, qval)
 
                 self.log.debug('q after second CG pass = %8.12g' % qval)
 
+                lower, upper = self.get_active_set(x)
                 g = qp.grad(x)
                 pg = self.pgrad(x, g=g, active_set=(lower, upper))
                 pgNorm = np.linalg.norm(pg)
