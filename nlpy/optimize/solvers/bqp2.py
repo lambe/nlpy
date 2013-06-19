@@ -275,32 +275,32 @@ class BQP(object):
             raise ValueError('First breakpoint is zero.')
 
         # Check for local optimality.
-        tol = 1.0e-6 * np.linalg.norm(x)
+        # tol = 1.0e-6 * np.linalg.norm(x)
 
-        if np.linalg.norm(self.project(x + step*d) - x) < tol:
-            # Update the active set in case the projected point is better
-            x_new = self.project(x + step*d)
-            q_new = qp.obj(x_new)
-            if q_new > qval:
-                # If the projected point is worse, take the first local min,
-                # up to the first breakpoint (interpolation to be added)
-                x_bk = self.project(x + bk_min*d)
-                q_bk = qp.obj(x_new)
-                step = bk_min
-                slope = np.dot(g, d) / np.linalg.norm(d)
-                a = (q_bk - qval - slope*bk_min)/bk_min**2
-                step_opt = -slope/2/a
-                if a > 0 and step_opt < bk_min:
-                    step = step_opt
-                    x_new = self.project(x + step * d)
-                    q_new = qp.obj(x_new)
-                else:
-                    step = bk_min
-                    xps = x_bk
-                    q_xps = q_bk
-                # end if
-            self.log.debug('Local optimality detected, exiting with q = %7.12e.' % q_new)
-            return (x_new, q_new, step)
+        # if np.linalg.norm(self.project(x + step*d) - x) < tol:
+        #     # Update the active set in case the projected point is better
+        #     x_new = self.project(x + step*d)
+        #     q_new = qp.obj(x_new)
+        #     if q_new > qval:
+        #         # If the projected point is worse, take the first local min,
+        #         # up to the first breakpoint (interpolation to be added)
+        #         x_bk = self.project(x + bk_min*d)
+        #         q_bk = qp.obj(x_new)
+        #         step = bk_min
+        #         slope = np.dot(g, d)
+        #         a = (q_bk - qval - slope*bk_min)/bk_min**2
+        #         step_opt = -slope/2/a
+        #         if a > 0 and step_opt < bk_min:
+        #             step = step_opt
+        #             x_new = self.project(x + step * d)
+        #             q_new = qp.obj(x_new)
+        #         else:
+        #             step = bk_min
+        #             xps = x_bk
+        #             q_xps = q_bk
+        #         # end if
+        #     self.log.debug('Local optimality detected, exiting with q = %7.12e.' % q_new)
+        #     return (x_new, q_new, step)
 
         self.log.debug('Projected linesearch with initial q = %7.12e' % qval)
         #print 'Projected linesearch with initial q = %7.1e' % qval
@@ -337,8 +337,9 @@ class BQP(object):
                 # Quadratic interpolation to find best point
                 x_bk = self.project(x + bk_min * d)
                 q_bk = qp.obj(x_bk)
-                slope = np.dot(g, d) / np.linalg.norm(d)
+                slope = np.dot(g, d)
                 a = (q_bk - qval - slope*bk_min)/bk_min**2
+                self.log.debug('Attempt interpolation, slope = %7.1e, a = %7.1e' % (slope,a))
                 step_opt = -slope/2/a
                 if a > 0 and step_opt < bk_min:
                     step = step_opt
@@ -349,6 +350,8 @@ class BQP(object):
                     xps = self.project(x + bk_min * d)
                     q_xps = qp.obj(xps)
                 # end if
+                self.log.debug('Interpolation with optimal step = %7.1e' % step_opt)
+                self.log.debug('Interpolated q = %7.12e' % q_xps)
             # end if
         else:
             # The initial step yields sufficient decrease. See if we can
@@ -617,8 +620,9 @@ class BQP(object):
 
                 self.log.debug('q after first CG pass = %8.12g' % qval)
 
+            lower, upper = self.get_active_set(x)
             g = qp.grad(x)
-            pg = self.pgrad(x, g=g) #, active_set=(lower, upper))
+            pg = self.pgrad(x, g=g, active_set=(lower, upper))
             pgNorm = np.linalg.norm(pg)
 
             if pgNorm <= stoptol:
@@ -630,8 +634,6 @@ class BQP(object):
                 continue
 
             # Compare active set to binding set.
-            lower, upper = self.get_active_set(x)
-
             if np.all(g[lower] >= 0) and np.all(g[upper] <= 0):
                 # The active set agrees with the binding set.
                 # Continue CG iterations with tighter tolerance.
@@ -690,6 +692,9 @@ class BQP(object):
             if q_dec > self.best_q_decrease:
                 self.best_q_decrease = q_dec
             q_old = qval
+
+            if q_dec < 0.:
+                raise ValueError('Function value increased in a monotone method.')
 
             # Additional optimality check if decrease in q is used as a metric
             if self.use_q_conv and q_dec < self.q_reltol*self.best_q_decrease:
