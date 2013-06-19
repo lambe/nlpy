@@ -283,22 +283,25 @@ class BQP(object):
         #     q_new = qp.obj(x_new)
         #     if q_new > qval:
         #         # If the projected point is worse, take the first local min,
-        #         # up to the first breakpoint (interpolation to be added)
+        #         # up to the first breakpoint
         #         x_bk = self.project(x + bk_min*d)
-        #         q_bk = qp.obj(x_new)
+        #         q_bk = qp.obj(x_bk)
         #         step = bk_min
         #         slope = np.dot(g, d)
         #         a = (q_bk - qval - slope*bk_min)/bk_min**2
         #         step_opt = -slope/2/a
+        #         self.log.debug('Attempt interpolation, slope = %7.1e, a = %7.1e' % (slope,a))
         #         if a > 0 and step_opt < bk_min:
         #             step = step_opt
         #             x_new = self.project(x + step * d)
         #             q_new = qp.obj(x_new)
         #         else:
         #             step = bk_min
-        #             xps = x_bk
-        #             q_xps = q_bk
+        #             x_new = x_bk
+        #             q_new = q_bk
         #         # end if
+        #         self.log.debug('Interpolation with optimal step = %7.1e' % step_opt)
+        #         self.log.debug('Interpolated q = %7.12e' % q_new)
         #     self.log.debug('Local optimality detected, exiting with q = %7.12e.' % q_new)
         #     return (x_new, q_new, step)
 
@@ -319,7 +322,6 @@ class BQP(object):
             slope = np.dot(g, xps - x)
 
         decrease = (q_xps < qval + factor * slope)
-        backtrack_only = kwargs.get('backtrack_only',False)
 
         if not decrease:
             # Perform projected Armijo linesearch in order to reduce the step
@@ -350,7 +352,7 @@ class BQP(object):
                     xps = self.project(x + bk_min * d)
                     q_xps = qp.obj(xps)
                 # end if
-                self.log.debug('Interpolation with optimal step = %7.1e' % step_opt)
+                self.log.debug('Interpolation with optimal step = %7.1e' % step)
                 self.log.debug('Interpolated q = %7.12e' % q_xps)
             # end if
         else:
@@ -374,11 +376,13 @@ class BQP(object):
                         q_prev = q_xps
                 xps = x_ok.copy()
                 q_xps = q_ok
-        q_xps = qp.obj(xps)
+        # q_xps = qp.obj(xps)
 
         if q_xps > qval:
-            xps = x.copy()
-            q_xps = qval
+            raise ValueError('Line search returning a worse function value.')
+            # pdb.set_trace()
+            # xps = x.copy()
+            # q_xps = qval
         self.log.debug('Projected linesearch ends with q = %7.12e' % q_xps)
         #print 'step:', step
         #print 'q_xps', q_xps
@@ -550,7 +554,7 @@ class BQP(object):
             #                                          active_set=(lower, upper))
 
             # Get an approximate Cauchy point for the problem
-            x, qval, step = self.projected_linesearch(x, g, -pg, qval)
+            x, qval, step = self.projected_linesearch(x, g, -pg, qval, use_bk_min=True)
             lower, upper = self.get_active_set(x)
 
             g = qp.grad(x)
@@ -686,6 +690,10 @@ class BQP(object):
                 if pgNorm <= stoptol:
                     self.log.debug('Exiting because residual is small')
                     exitOptimal = True
+
+            else:
+
+                self.log.debug('Active set != binding set. Try projected gradient again.')
 
             q_dec = q_old - qval
             self.log.debug('qval = %15.10g, q_dec = %15.10g' % (qval,q_dec))
