@@ -511,6 +511,10 @@ class BQP(object):
         self.q_reltol = kwargs.get('q_reltol',1.0e-3)
         self.best_q_decrease = 0.
 
+        # Implementation of a "minimum distance" stopping condition
+        self.use_x_conv = kwargs.get('use_x_conv',False)
+        self.x_reltol = kwargs.get('x_reltol',1.0e-6)
+
         # Compute initial data.
         self.log.debug('q before initial x projection = %7.1e' % qp.obj(qp.x0))
         x = self.project(qp.x0)
@@ -706,7 +710,7 @@ class BQP(object):
 
             # Additional optimality check if decrease in q is used as a metric
             if self.use_q_conv and q_dec < self.q_reltol*self.best_q_decrease:
-                self.log.debug('Exiting because q decrease is small')
+                self.log.debug('Exiting because q decrease is small.')
                 exitOptimal = True
 
             # If we are using BQP to solve a trust region subproblem, stop if 
@@ -714,6 +718,10 @@ class BQP(object):
             if self.TRconv and (np.max(np.abs(x)) == self.TRradius):
                 self.log.debug('Exiting because a trust region boundary was hit.')
                 exitTR = True
+
+            if self.use_x_conv and np.linalg.norm(x - x_old) <= self.x_reltol*np.linalg.norm(x):
+                self.log.debug('Exiting because relative change in x is small.')
+                exitOptimal = True
 
             cgiter = cgiter_1 + cgiter_2  # Total CG iters in this BQP iteration.
             self.cgiter += cgiter         # Total CG iters so far.
