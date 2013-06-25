@@ -21,7 +21,7 @@ import numpy as np
 import logging
 import warnings
 
-# import pdb
+import pdb
 
 
 __docformat__ = 'restructuredtext'
@@ -561,6 +561,18 @@ class BQP(object):
             x, qval, step = self.projected_linesearch(x, g, -pg, qval, use_bk_min=True)
             lower, upper = self.get_active_set(x)
 
+            # Test curvature in projected gradient direction
+            if self.TRconv:
+                curv = np.dot(pg,self.H*pg)
+                if curv <= 0. and np.max(np.abs(x[np.where(pg != 0.)])) == self.TRradius:
+                    # self.log.debug('curv = %7.2e' % curv)
+                    # self.log.debug('radius = %7.4e, x_nc_max = %7.4e' % (self.TRradius,np.max(np.abs(x[np.where(pg != 0.)]))))                
+                    self.log.debug('Exiting because the trust region boundary was encountered.')
+                    exitTR = True
+                    break
+                # end if
+            # end if
+
             g = qp.grad(x)
             # qval = qp.obj(x)
             self.log.debug('q after Cauchy point calculation = %8.12g' % qval)
@@ -622,6 +634,12 @@ class BQP(object):
                 # (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
                 # qval = qp.obj(x)
                 x, qval, step = self.projected_linesearch(x, g, nc_dir, qval) # use_bk_min?
+
+                # Look for trust region boundary in negative curvature direction
+                # self.log.debug('radius = %7.4e, x_nc_max = %7.4e' % (self.TRradius,np.max(np.abs(x[free_vars]))))
+                if self.TRconv and (np.max(np.abs(x[free_vars])) == self.TRradius):
+                    self.log.debug('Exiting because the trust region boundary was encountered.')
+                    exitTR = True
             else:
                 # 4. Update x using projected linesearch with initial step=1.
                 x, qval, step = self.projected_linesearch(x, g, d, qval)
@@ -679,6 +697,12 @@ class BQP(object):
                     # (x, (lower, upper)) = self.to_boundary(x, nc_dir, free_vars)
                     # qval = qp.obj(x)
                     x, qval, step = self.projected_linesearch(x, g, d, qval) # use_bk_min?
+
+                    # Look for trust region boundary in negative curvature direction
+                    # self.log.debug('radius = %7.4e, x_nc_max = %7.4e' % (self.TRradius,np.max(np.abs(x[free_vars]))))
+                    if self.TRconv and (np.max(np.abs(x[free_vars])) == self.TRradius):
+                        self.log.debug('Exiting because the trust region boundary was encountered.')
+                        exitTR = True
                 else:
                     # 4. Update x using projected linesearch with step=1.
                     x, qval, step = self.projected_linesearch(x, g, d, qval)
@@ -715,9 +739,9 @@ class BQP(object):
 
             # If we are using BQP to solve a trust region subproblem, stop if 
             # we hit the trust region boundary
-            if self.TRconv and (np.max(np.abs(x)) == self.TRradius):
-                self.log.debug('Exiting because a trust region boundary was hit.')
-                exitTR = True
+            # if self.TRconv and (np.max(np.abs(x)) == self.TRradius):
+            #     self.log.debug('Exiting because a trust region boundary was hit.')
+            #     exitTR = True
 
             if self.use_x_conv and np.linalg.norm(x - x_old) <= self.x_reltol*np.linalg.norm(x):
                 self.log.debug('Exiting because relative change in x is small.')
