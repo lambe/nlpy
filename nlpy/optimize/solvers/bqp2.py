@@ -316,7 +316,11 @@ class BQP(object):
                 slope = np.dot(g, d)
                 a = (q_bk - qval - slope*bk_min)/bk_min**2
                 self.log.debug('Attempt interpolation, slope = %7.1e, a = %7.1e' % (slope,a))
-                step_opt = -slope/2/a
+                if a == 0:
+                    step_opt = bk_min
+                else:
+                    step_opt = -slope/2/a
+                # end if
                 if a > 0 and step_opt < bk_min:
                     step = step_opt
                     xps = self.project(x + step * d)
