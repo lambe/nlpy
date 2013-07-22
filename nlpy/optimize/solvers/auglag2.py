@@ -464,14 +464,17 @@ class AugmentedLagrangianStructuredQuasiNewton(AugmentedLagrangianQuasiNewton):
         Compute the Hessian-vector product of the Hessian of the augmented
         Lagrangian with arbitrary vector v.
         """
-        w = self.Hessapp.matvec(v)
+        on = self.nlp.original_n
+        w = np.zeros(self.n)
+        w[:on] = self.Hessapp.matvec(v[:on])
         J = self.nlp.jac(x)
         w += self.rho * (J.T * (J * v))
         return w
 
     def update(self, new_s=None, new_y=None, new_yd=None):
+        on = self.nlp.original_n
         if new_s is not None and new_y is not None and new_yd is not None:
-            self.Hessapp.store(new_s,new_y,new_yd)
+            self.Hessapp.store(new_s[:on],new_y[:on],new_yd[:on])
         return
 
     def hreset(self):
@@ -487,8 +490,8 @@ class AugmentedLagrangianStructuredLbfgs(AugmentedLagrangianStructuredQuasiNewto
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LBFGS_structured(self.n,
-                       npairs=kwargs.get('qn_pairs',100), scaling=True, **kwargs)
+        self.Hessapp = LBFGS_structured(self.nlp.original_n,
+                       npairs=kwargs.get('qn_pairs',5), scaling=True, **kwargs)
 
 
 
@@ -499,8 +502,8 @@ class AugmentedLagrangianStructuredLsr1(AugmentedLagrangianStructuredQuasiNewton
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_structured(self.n,
-                       npairs=kwargs.get('qn_pairs',100),#min(3,self.n)),
+        self.Hessapp = LSR1_structured(self.nlp.original_n,
+                       npairs=kwargs.get('qn_pairs',5),#min(3,self.n)),
                        scaling=False, **kwargs)
 
 

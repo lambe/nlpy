@@ -490,6 +490,8 @@ class SBMINPartialLqnFramework(SBMINFramework):
             y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
             self.nlp.hupdate(s,y)
 
+
+
 class SBMINStructuredLqnFramework(SBMINFramework):
     """
     Class SBMINPartialLqnFramework is a subclass of SBMINFramework. The method
@@ -503,6 +505,7 @@ class SBMINStructuredLqnFramework(SBMINFramework):
     def __init__(self, nlp, TR, TrSolver, **kwargs):
 
         SBMINFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
+        self.save_g = True
         self.save_lg = True
 
     def PostIteration(self, **kwargs):
