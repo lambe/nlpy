@@ -17,8 +17,8 @@ import logging
 # =============================================================================
 from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
-from nlpy.optimize.solvers.lbfgs import LBFGS
-from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling
+from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured
+from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
 from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
@@ -119,6 +119,33 @@ class AugmentedLagrangian(NLPModel):
         w += self.rho * (J.T * (J * v))
         return w
 
+    def _hprod(self, x, z, v, **kwargs):
+        """
+        Compute the Hessian-vector product of the Hessian of the augmented
+        Lagrangian with arbitrary vector v.
+        """
+        nlp = self.nlp
+        on = nlp.original_n
+        om = nlp.original_m
+        upperC = nlp.upperC ; nupperC = nlp.nupperC
+        rangeC = nlp.rangeC ; nrangeC = nlp.nrangeC
+        w = np.zeros(self.n)
+
+        pi_bar = self.pi[:om].copy()
+        pi_bar[upperC] *= -1.0
+        pi_bar[rangeC] -= self.pi[om:].copy()
+
+        cons = nlp.cons(x)
+
+        mu = cons[:om].copy()
+        mu[upperC] *= -1.0
+        mu[rangeC] -= cons[om:].copy()
+
+        w[:on] = nlp.hprod(x[:on], -pi_bar + self.rho * mu, v[:on])
+        J = nlp.jac(x)
+        w += self.rho * (J.T * (J * v))
+        return w
+
 
     def hess(self, x, z=None, **kwargs):
         return SimpleLinearOperator(self.n, self.n, symmetric=True,
@@ -151,7 +178,11 @@ class AugmentedLagrangianQuasiNewton(AugmentedLagrangian):
 
 
     def hreset(self):
+        print 'restart'
         self.Hessapp.restart()
+        print self.Hessapp.s
+        print self.Hessapp.y
+        print self.Hessapp.ys
         return
 
 
@@ -163,7 +194,7 @@ class AugmentedLagrangianLbfgs(AugmentedLagrangianQuasiNewton):
 
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',5), scaling=True, **kwargs)
+        self.Hessapp = LBFGS(self.n, npairs=kwargs.get('qn_pairs',100), scaling=True, **kwargs)
 
 
 
@@ -173,7 +204,7 @@ class AugmentedLagrangianLsr1(AugmentedLagrangianQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1(self.n, npairs=kwargs.get('qn_pairs',5), **kwargs)
+        self.Hessapp = LSR1(self.n, npairs=kwargs.get('qn_pairs',100),scaling=False, **kwargs)
 
 
 
@@ -413,6 +444,64 @@ class AugmentedLagrangianTotalLsr1TR1B(AugmentedLagrangianTotalQuasiNewton):
         self.Jacapp = TR1B(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
+
+
+
+class AugmentedLagrangianStructuredQuasiNewton(AugmentedLagrangianQuasiNewton):
+    """
+    Only apply the Quasi Newton approximation to the second order terms of the
+    Hessian of the augmented Lagrangian, i.e. not the pJ'J term.
+
+    H(x) = A(x) + \rho J(x)^T J(x)
+    where A(x) is an approximation of the second order terms of the Hessian of
+    the augmented Lagrangian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangian.__init__(self, nlp, **kwargs)
+
+    def hprod(self, x, z, v, **kwargs):
+        """
+        Compute the Hessian-vector product of the Hessian of the augmented
+        Lagrangian with arbitrary vector v.
+        """
+        w = self.Hessapp.matvec(v)
+        J = self.nlp.jac(x)
+        w += self.rho * (J.T * (J * v))
+        return w
+
+    def update(self, new_s=None, new_y=None, new_yd=None):
+        if new_s is not None and new_y is not None and new_yd is not None:
+            self.Hessapp.store(new_s,new_y,new_yd)
+        return
+
+    def hreset(self):
+        self.Hessapp.restart()
+        return
+
+
+
+class AugmentedLagrangianStructuredLbfgs(AugmentedLagrangianStructuredQuasiNewton):
+    """
+    Only apply the LBFGS approximation to the second order terms of the 
+    Hessian of the augmented Lagrangian, i.e. not the pJ'J term.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LBFGS_structured(self.n,
+                       npairs=kwargs.get('qn_pairs',100), scaling=True, **kwargs)
+
+
+
+class AugmentedLagrangianStructuredLsr1(AugmentedLagrangianStructuredQuasiNewton):
+    """
+    Only apply the LSR1 approximation to the second order terms of the 
+    Hessian of the augmented Lagrangian, i.e. not the pJ'J term.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_structured(self.n,
+                       npairs=kwargs.get('qn_pairs',100),#min(3,self.n)),
+                       scaling=False, **kwargs)
 
 
 
@@ -983,3 +1072,17 @@ class AugmentedLagrangianTotalLsr1TR1BFramework(AugmentedLagrangianQuasiNewtonFr
 
 
 
+class AugmentedLagrangianStructuredLbfgsFramework(AugmentedLagrangianLbfgsFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianLbfgsFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.alprob = AugmentedLagrangianStructuredLbfgs(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianStructuredLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.update_on_rejected_step = True
+        self.alprob = AugmentedLagrangianStructuredLsr1(nlp,**kwargs)
