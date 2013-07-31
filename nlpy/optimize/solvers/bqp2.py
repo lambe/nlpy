@@ -116,6 +116,28 @@ class SufficientDecreaseCG(TruncatedCG):
         return None
 
 
+
+class PreconditioningCG(TruncatedCG):
+    """
+    An experimental implementation of a self-preconditioner to pass to 
+    the CG algorithm. This is very similar to the TruncatedCG class, but 
+    includes a modified solve function and much earlier stopping condition.
+    """
+    def __init__(self, g, H, **kwargs):
+        TruncatedCG.__init__(self, g, H, **kwargs)
+        self.name = 'Prec-CG'
+
+
+    def PrecSolve(self, r, **kwargs):
+        self.g = r
+        self.Solve(reltol=1.e-1, abstol=1.e-6)
+        if self.status == 'residual small':
+            return -self.step
+        else:
+            return self.g
+
+
+
 class BQP(object):
     """
     A matrix-free active-set method for the bound-constrained quadratic
@@ -468,12 +490,15 @@ class BQP(object):
             ZHZ = ReducedHessian(self.H, free_vars)
             Zg  = g[free_vars]
 
+            # Set up a self-preconditioner for the cg
+            prec_cg = PreconditioningCG(Zg, ZHZ)
+
             cg = SufficientDecreaseCG(Zg, ZHZ, #x=x[free_vars],
                                       #Lvar=qp.Lvar[free_vars],
                                       #Uvar=qp.Uvar[free_vars],
                                       detect_stalling=True)
             try:
-                cg.Solve(abstol=1.0e-5, reltol=1.0e-3)
+                cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=prec_cg.PrecSolve)
             except UserExitRequest:
                 msg  = 'CG is no longer making substantial progress'
                 msg += ' (%d its)' % cg.niter
@@ -536,11 +561,12 @@ class BQP(object):
                 free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
                 ZHZ = ReducedHessian(self.H, free_vars)
                 Zg  = g[free_vars]
+                prec_cg = PreconditioningCG(Zg, ZHZ)
                 cg = SufficientDecreaseCG(Zg, ZHZ,  #x=x[free_vars],
                                           #Lvar=qp.Lvar[free_vars],
                                           #Uvar=qp.Uvar[free_vars],
                                           detect_stalling=True)
-                cg.Solve(absol=1.0e-6, reltol=1.0e-4)
+                cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=prec_cg.PrecSolve)
 
                 msg = 'CG stops (%d its, status = %s)' % (cg.niter, cg.status)
                 self.log.debug(msg)
