@@ -56,7 +56,7 @@ class AugmentedLagrangian(NLPModel):
         self.rho_init = kwargs.get('rho_init',10.)
         self.rho = self.rho_init
 
-        self.pi0 = np.zeros(self.nlp.m)
+        self.pi0 = np.ones(self.nlp.m)*kwargs.get('pi0',0.)
         self.pi = self.pi0.copy()
 
 
@@ -178,11 +178,11 @@ class AugmentedLagrangianQuasiNewton(AugmentedLagrangian):
 
 
     def hreset(self):
-        print 'restart'
+        # print 'restart'
         self.Hessapp.restart()
-        print self.Hessapp.s
-        print self.Hessapp.y
-        print self.Hessapp.ys
+        # print self.Hessapp.s
+        # print self.Hessapp.y
+        # print self.Hessapp.ys
         return
 
 
@@ -504,7 +504,7 @@ class AugmentedLagrangianStructuredLsr1(AugmentedLagrangianStructuredQuasiNewton
         AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_structured(self.nlp.original_n,
                        npairs=kwargs.get('qn_pairs',5),#min(3,self.n)),
-                       scaling=False, **kwargs)
+                       scaling=True, **kwargs)
 
 
 

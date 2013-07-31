@@ -526,8 +526,9 @@ class SBMINStructuredLqnFramework(SBMINFramework):
             pi = self.nlp.pi
             rho = self.nlp.rho
             dc = -pi + rho * consx
-            ydB = gx - gx_old + Jx.T * dc - Jx_old.T * dc
+            # ydB = gx - gx_old + Jx.T * dc - Jx_old.T * dc
             yB = self.g - self.g_old
+            ydB = yB - rho * (Jx_old.T * consx - Jx_old.T * consx_old)
             #ydB = self.lg - self.lg_old # if set to this should be the same as the unrolling formula
             #yB = ydB.copy()
             self.nlp.update(s, yB, ydB)
@@ -542,8 +543,9 @@ class SBMINStructuredLqnFramework(SBMINFramework):
             pi = self.nlp.pi
             rho = self.nlp.rho
             dc = -pi + rho * consx
-            ydB = gx - gx_old + Jx.T * dc - Jx_old.T * dc
+            # ydB = gx - gx_old + Jx.T * dc - Jx_old.T * dc
             yB = self.nlp.grad(self.x_old+s) - self.g_old
+            ydB = yB - rho * (Jx_old.T * consx - Jx_old.T * consx_old)
             #ydB = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old # if set to this should be the same as the unrolling formula
             #yB = ydB.copy()
             self.nlp.update(s, yB, ydB)

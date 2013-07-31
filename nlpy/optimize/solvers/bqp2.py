@@ -360,7 +360,10 @@ class BQP(object):
         #end if
 
         if q_xps > qval:
-            raise ValueError('Line search returning a worse function value.')
+            # raise ValueError('Line search returning a worse function value.')
+            self.log.debug('Line search returning a worse function value. Exiting linesearch.')
+            self.log.debug('Difference = %7.12e' % (q_xps - qval))
+            return (x, qval, 0.0) # In the rare case that the line search fails
         self.log.debug('Projected linesearch ends with q = %7.12e' % q_xps)
 
         return (xps, q_xps, step)
