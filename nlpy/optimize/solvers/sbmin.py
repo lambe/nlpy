@@ -115,6 +115,8 @@ class SBMINFramework(object):
         self.cgiter = 0
         self.total_cgiter = 0
 
+        self.prec = kwargs.get('prec_BQP',False)
+
         self.hformat = '%-5s  %9s  %7s %7s %5s  %8s  %8s  %4s'
         self.header  = self.hformat % ('     Iter','f(x)','|g(x)|', 'step', 'bqp',
                                        'rho','Radius','Stat')
@@ -255,7 +257,7 @@ class SBMINFramework(object):
 
             bqptol = max(1.0e-6, min(0.1 * bqptol, sqrt(self.pgnorm)))
 
-            self.solver = self.TrSolver(qp, qp.grad)
+            self.solver = self.TrSolver(qp, qp.grad, use_prec=self.prec)
             self.solver.Solve(reltol=bqptol)
 
             step = self.solver.step
