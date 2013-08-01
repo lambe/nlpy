@@ -131,10 +131,11 @@ class PreconditioningCG(TruncatedCG):
     def PrecSolve(self, r, **kwargs):
         self.g = r
         self.Solve(reltol=1.e-1, abstol=1.e-6)
-        if self.status == 'residual small':
-            return -self.step
-        else:
-            return self.g
+        return -self.step # Return step regardless of progress made
+        # if self.status == 'residual small':
+        #     return -self.step
+        # else:
+        #     return self.g
 
 
 
@@ -409,6 +410,9 @@ class BQP(object):
         self.use_x_conv = kwargs.get('use_x_conv',False)
         self.x_reltol = kwargs.get('x_reltol',1.0e-6)
 
+        # Decide whether or not to use the self preconditioner
+        self.use_prec = kwargs.get('use_prec',False)
+
         # Compute initial data.
         self.log.debug('q before initial x projection = %7.1e' % qp.obj(qp.x0))
         x = self.project(qp.x0)
@@ -498,7 +502,10 @@ class BQP(object):
                                       #Uvar=qp.Uvar[free_vars],
                                       detect_stalling=True)
             try:
-                cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=prec_cg.PrecSolve)
+                if self.use_prec:
+                    cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=prec_cg.PrecSolve)
+                else:
+                    cg.Solve(abstol=1.0e-5, reltol=1.0e-3)
             except UserExitRequest:
                 msg  = 'CG is no longer making substantial progress'
                 msg += ' (%d its)' % cg.niter
@@ -566,7 +573,10 @@ class BQP(object):
                                           #Lvar=qp.Lvar[free_vars],
                                           #Uvar=qp.Uvar[free_vars],
                                           detect_stalling=True)
-                cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=prec_cg.PrecSolve)
+                if self.use_prec:
+                    cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=prec_cg.PrecSolve)
+                else:
+                    cg.Solve(absol=1.0e-6, reltol=1.0e-4)
 
                 msg = 'CG stops (%d its, status = %s)' % (cg.niter, cg.status)
                 self.log.debug(msg)

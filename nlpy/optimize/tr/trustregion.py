@@ -262,7 +262,7 @@ class TrustRegionBQP(TrustRegionSolver):
         Solve trust-region subproblem using the active-set method of More and
         Toraldo.
         """
-        self.bqpSolver.solve(use_q_conv=True, use_x_conv=True, **kwargs)
+        self.bqpSolver.solve(use_q_conv=True, use_x_conv=True, use_prec=True, **kwargs)
         self.niter = self.bqpSolver.niter
         self.stepNorm = norms.norm_infty(self.bqpSolver.x)
         self.step = self.bqpSolver.x
