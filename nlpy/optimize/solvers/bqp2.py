@@ -117,14 +117,14 @@ class SufficientDecreaseCG(TruncatedCG):
 
 
 
-class PreconditioningCG(TruncatedCG):
+class PreconditioningCG(SufficientDecreaseCG):
     """
     An experimental implementation of a self-preconditioner to pass to 
     the CG algorithm. This is very similar to the TruncatedCG class, but 
     includes a modified solve function and much earlier stopping condition.
     """
     def __init__(self, g, H, **kwargs):
-        TruncatedCG.__init__(self, g, H, **kwargs)
+        SufficientDecreaseCG.__init__(self, g, H, **kwargs)
         self.name = 'Prec-CG'
 
 
