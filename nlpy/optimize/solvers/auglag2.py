@@ -93,6 +93,17 @@ class AugmentedLagrangian(NLPModel):
         return lgrad
 
 
+    def primal_feasibility(self, x, **kwargs):
+        """
+        Evaluate the gradient of the feasibility problem.
+        """
+        nlp = self.nlp
+        J = nlp.jac(x)
+        cons = nlp.cons(x)
+        igrad = J.T * cons
+        return igrad
+
+
     def hprod(self, x, z, v, **kwargs):
         """
         Compute the Hessian-vector product of the Hessian of the augmented
@@ -253,6 +264,57 @@ class AugmentedLagrangianPartialLsr1(AugmentedLagrangianPartialQuasiNewton):
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianPartialQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+
+
+
+class AugmentedLagrangianSplitQuasiNewton(AugmentedLagrangianQuasiNewton):
+    """
+    Apply separate Quasi-Newton approximations to the Hessian of the 
+    Lagrangian and primal feasibility terms.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianQuasiNewton.__init__(self, nlp, **kwargs)
+
+
+    def hprod(self, x, z, v, **kwargs):
+        on = self.nlp.original_n
+        w = np.zeros(self.n)
+        w[:on] = self.Hessapp.matvec(v[:on])
+        w += self.rho * self.Hessapp_feas.matvec(v)
+        return w
+
+
+    def hupdate(self, new_s=None, new_y=None, new_yi=None):
+        on = self.nlp.original_n
+        if new_s is not None and new_y is not None:
+            self.Hessapp.store(new_s[:on],new_y[:on])
+        if new_s is not None and new_yi is not None:
+            self.Hessapp_feas.store(new_s,new_yi)
+        return
+
+
+
+class AugmentedLagrangianSplitLbfgs(AugmentedLagrangianSplitQuasiNewton):
+    """
+    Apply separate LBFGS approximations to the Hessian of the 
+    Lagrangian and primal feasibility terms.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LBFGS(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp_feas = LBFGS(self.nlp.n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+
+
+
+class AugmentedLagrangianSplitLsr1(AugmentedLagrangianSplitQuasiNewton):
+    """
+    Apply separate LSR1 approximations to the Hessian of the 
+    Lagrangian and primal feasibility terms.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp_feas = LSR1_unrolling(self.nlp.n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
 
 
 
@@ -963,10 +1025,10 @@ class AugmentedLagrangianLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
 
 
 
-class AugmentedLagrangianPartialLbfgsFramework(AugmentedLagrangianLbfgsFramework):
+class AugmentedLagrangianPartialLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianLbfgsFramework.__init__(self, nlp, innerSolver, **kwargs)
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
         self.alprob = AugmentedLagrangianPartialLbfgs(nlp,**kwargs)
 
 
@@ -977,6 +1039,23 @@ class AugmentedLagrangianPartialLsr1Framework(AugmentedLagrangianQuasiNewtonFram
         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
         self.update_on_rejected_step = True
         self.alprob = AugmentedLagrangianPartialLsr1(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.alprob = AugmentedLagrangianSplitLbfgs(nlp,**kwargs)
+
+
+
+class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        self.update_on_rejected_step = True
+        self.alprob = AugmentedLagrangianSplitLsr1(nlp,**kwargs)
 
 
 
