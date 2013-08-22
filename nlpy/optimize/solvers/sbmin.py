@@ -83,8 +83,11 @@ class SBMINFramework(object):
         self.g_old  = kwargs.get('g0',None)
         self.lg     = None
         self.lg_old = kwargs.get('Lg0',None)
+        self.ig     = None
+        self.ig_old = kwargs.get('Ig0',None)
         self.save_g = False              # For methods that need g_{k-1} and g_k
-        self.save_lg = False             # Similar to save_g
+        self.save_lg = False             # Similar to save_g, but for a Lagrangian gradient
+        self.save_ig = False             # Save the infeasibility gradient
         self.pgnorm  = None
         self.tsolve = 0.0
         self.true_step = None
@@ -202,10 +205,17 @@ class SBMINFramework(object):
         self.pgnorm = norm_infty(self.projected_gradient(self.x, self.g))
         self.pg0 = self.pgnorm
 
+        # Save the Lagrangian gradient for certain problems
         if self.save_lg:
             if self.lg_old is None:
                 self.lg_old = self.nlp.dual_feasibility(self.x)
             self.lg = self.lg_old.copy()
+
+        # Save the gradient of the infeasibility function for certain problems
+        if self.save_ig:
+            if self.ig_old is None:
+                self.ig_old = self.nlp.primal_feasibility(self.x)
+            self.ig = self.ig_old.copy()
 
         self.f  = self.f0
 
@@ -249,6 +259,9 @@ class SBMINFramework(object):
 
             if self.save_lg:
                 self.lg_old = self.lg.copy()
+
+            if self.save_ig:
+                self.ig_old = self.ig.copy()
 
             # Iteratively minimize the quadratic model in the trust region
             #          m(d) = <g, d> + 1/2 <d, Hd>
@@ -385,6 +398,9 @@ class SBMINFramework(object):
             if self.save_lg:
                 self.lg = nlp.dual_feasibility(self.x)
 
+            if self.save_ig:
+                self.ig = nlp.primal_feasibility(self.x)
+
             self.true_step = self.x - self.x_old
             self.pstatus = step_status if step_status != 'Acc' else ''
             self.radius = self.radii[-2]
@@ -491,6 +507,43 @@ class SBMINPartialLqnFramework(SBMINFramework):
             s = self.solver.step
             y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
             self.nlp.hupdate(s,y)
+
+
+
+class SBMINSplitLqnFramework(SBMINFramework):
+    """
+    Class SBMINSplitLqnFramework is a subclass of SBMINFramework. The method
+    is based on a trust-region-based algorithm for nonlinear box constrained
+    programming.
+    The only difference is that a limited-memory Quasi Newton Hessian
+    approximation is used and maintained along the iterations. Unlike the
+    SBMINLqnFramework class, limited-memory matrix does not approximate the
+    first order term in the Hessian, i.e. not the pJ'J term.
+    """
+    def __init__(self, nlp, TR, TrSolver, **kwargs):
+
+        SBMINFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
+        self.save_lg = True
+        self.save_ig = True
+
+    def PostIteration(self, **kwargs):
+        """
+        This method updates the limited-memory quasi-Newton Hessian by
+        appending the most recent (s,y) pair to it and possibly discarding the
+        oldest one if all the memory has been used.
+
+        The update only takes place on *successful* iterations.
+        """
+        if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
+            s = self.x - self.x_old
+            y = self.lg - self.lg_old
+            yi = self.ig - self.ig_old
+            self.nlp.hupdate(s, y, yi)
+        elif self.update_on_rejected_step:
+            s = self.solver.step
+            y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
+            yi = self.nlp.primal_feasibility(self.x_old + s) - self.ig_old
+            self.nlp.hupdate(s, y, yi)
 
 
 
