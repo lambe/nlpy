@@ -19,6 +19,7 @@ from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
 from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured
 from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
+from nlpy.optimize.solvers.lsr1 import LSR1_new
 from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
@@ -263,7 +264,7 @@ class AugmentedLagrangianPartialLsr1(AugmentedLagrangianPartialQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianPartialQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
 
 
 
@@ -313,8 +314,8 @@ class AugmentedLagrangianSplitLsr1(AugmentedLagrangianSplitQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
-        self.Hessapp_feas = LSR1_unrolling(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
 
 
 
@@ -418,7 +419,7 @@ class AugmentedLagrangianTotalLsr1Broyden(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = Broyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -432,7 +433,7 @@ class AugmentedLagrangianTotalLsr1modBroyden(AugmentedLagrangianTotalQuasiNewton
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = modBroyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -446,7 +447,7 @@ class AugmentedLagrangianTotalLsr1DirBroyA(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = directBroydenA(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -460,7 +461,7 @@ class AugmentedLagrangianTotalLsr1AdjBroyA(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenA(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -474,7 +475,7 @@ class AugmentedLagrangianTotalLsr1AdjBroyB(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -488,7 +489,7 @@ class AugmentedLagrangianTotalLsr1MixBroy(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = mixedBroyden(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -502,7 +503,7 @@ class AugmentedLagrangianTotalLsr1TR1B(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_unrolling(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = TR1B(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
