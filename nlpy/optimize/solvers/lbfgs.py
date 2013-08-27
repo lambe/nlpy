@@ -398,6 +398,108 @@ class LBFGS_structured(InverseLBFGS):
         return
 
 
+
+class LBFGS_new(object):
+    """
+    Class LBFGS_new is an experimental version that uses the unrolling formula 
+    for the LBFGS approximation and a novel storage scheme to accelerate the 
+    matrix-vector product computation.
+    """
+
+    def __init__(self, n, npairs=5, **kwargs):
+        # Mandatory arguments
+        self.n = n
+        self.npairs = npairs
+
+        # Optional arguments
+        self.scaling = kwargs.get('scaling', False)
+
+        # The number of vector pairs that are actually stored
+        self.stored_pairs = 0
+
+        # Threshold on dot product s'y to accept a new pair (s,y).
+        self.accept_threshold = 1.0e-20
+
+        # Storage of the (s,y) pairs
+        self.s = []
+        self.y = []
+        self.a = [None]*npairs     # Unrolled vectors for the matvec
+        self.b = [None]*npairs
+        self.gamma = 1.0
+
+        # Keep track of number of matrix-vector products.
+        self.numMatVecs = 0
+
+        logger_name = kwargs.get('logger_name', 'nlpy.lbfgs')
+        self.log = logging.getLogger(logger_name)
+        #self.log.addHandler(logging.NullHandler())
+        self.log.info('Logger created')
+
+
+    def store(self, new_s, new_y):
+        """
+        Store the new pair (new_s,new_y). A new pair
+        is only accepted if 
+        s_k' y_k >= `self.accept_threshold`.
+        """
+        ys = numpy.dot(new_s, new_y)
+        if ys > self.accept_threshold:
+            self.s.append(new_s.copy())
+            self.y.append(new_y.copy())
+            if len(self.s) > self.npairs:
+                del self.s[0]
+                del self.y[0]
+            else:
+                self.stored_pairs += 1
+            # end if
+
+            if self.scaling:
+                self.gamma = ys / numpy.dot(new_y, new_y)
+
+            # Recompute stored data for the matvec computation
+            for i in range(self.stored_pairs):
+                self.b[i] = numpy.dot(self.y[i],self.s[i])**(-0.5) * self.y[i]
+                self.a[i] = self.s[i]/self.gamma
+                for j in range(i):
+                    bTs = numpy.dot(self.b[j],self.s[i])
+                    aTs = numpy.dot(self.a[j],self.s[i])
+                    self.a[i] += bTs*self.b[j] - aTs*self.a[j]
+                self.a[i] *= numpy.dot(self.a[i], self.s[i])**-0.5
+            # end for
+        else:
+            self.log.debug('Not accepting LBFGS update: ys=%g' % ys)
+        return
+
+
+    def restart(self):
+        """
+        Restart the approximation by clearing all data on past updates.
+        """
+        self.gamma = 1.0
+        self.s = []
+        self.y = []
+        self.a = [None]*self.npairs
+        self.b = [None]*self.npairs
+        self.stored_pairs = 0
+        return
+
+
+    def matvec(self, v):
+        """
+        Compute a matrix-vector product between the current limited-memory
+        approximation to the Hessian matrix and the vector v using
+        the unrolling formula.
+        """
+        self.numMatVecs += 1
+
+        w = v / self.gamma
+        for i in range(self.stored_pairs):
+            w += numpy.dot(self.b[i],v)*self.b[i] - numpy.dot(self.a[i],v)*self.a[i]
+        # end for
+        return w
+
+
+
 class LBFGSFramework:
     """
     Class LBFGSFramework provides a framework for solving unconstrained
