@@ -369,24 +369,15 @@ class SlackNLP( MFModel ):
         p = np.zeros(m)
 
         p[:om] = nlp.jprod(x[:on], v[:on], **kwargs)
-        # p[upperC] *= -1.0
-        np.put(p, upperC, p.take(upperC) * -1.0)
-        # p[om:om+nrangeC] = p[rangeC]
-        p[om:om+nrangeC] = p.take(rangeC)
+        p[upperC] *= -1.0
+        p[om:om+nrangeC] = p[rangeC]
         p[om:om+nrangeC] *= -1.0
 
         # Insert contribution of slacks on general constraints
-        bot = on
-        # p[lowerC] -= v[bot:bot+nlowerC]
-        np.put(p, lowerC, p.take(lowerC) - v[bot:bot+nlowerC])
-        bot += nlowerC
-        # p[rangeC] -= v[bot:bot+nrangeC]
-        np.put(p, rangeC, p.take(rangeC) - v[bot:bot+nrangeC])
-        bot += nrangeC
-        # p[upperC] -= v[bot:bot+nupperC]
-        np.put(p, upperC, p.take(upperC) - v[bot:bot+nupperC])
-        bot += nupperC
-        p[om:om+nrangeC] -= v[bot:bot+nrangeC]
+        bot = on;        p[lowerC] -= v[bot:bot+nlowerC]
+        bot += nlowerC;  p[rangeC] -= v[bot:bot+nrangeC]
+        bot += nrangeC;  p[upperC] -= v[bot:bot+nupperC]
+        bot += nupperC;  p[om:om+nrangeC] -= v[bot:bot+nrangeC]
 
         if self.keep_variable_bounds==False:
             # Insert contribution of bound constraints on the original problem
@@ -417,17 +408,15 @@ class SlackNLP( MFModel ):
 
         p = np.zeros(n)
         vmp = v[:om].copy()
-        # vmp[upperC] *= -1.0
-        np.put(vmp, upperC, vmp.take(upperC) * -1.0)
-        # vmp[rangeC] -= v[om:]
-        np.put(vmp, rangeC, vmp.take(rangeC) - v[om:])
+        vmp[upperC] *= -1.0
+        vmp[rangeC] -= v[om:]
 
         p[:on] = nlp.jtprod(x[:on], vmp, **kwargs)
 
         # Insert contribution of slacks on general constraints
-        bot = on;       p[on:on+nlowerC]    = -v.take(lowerC)
-        bot += nlowerC; p[bot:bot+nrangeC]  = -v.take(rangeC)
-        bot += nrangeC; p[bot:bot+nupperC]  = -v.take(upperC)
+        bot = on;       p[on:on+nlowerC]    = -v[lowerC]
+        bot += nlowerC; p[bot:bot+nrangeC]  = -v[rangeC]
+        bot += nrangeC; p[bot:bot+nupperC]  = -v[upperC]
         bot += nupperC; p[bot:bot+nrangeC]  = -v[om:om+nrangeC]
 
         if self.keep_variable_bounds==False:
