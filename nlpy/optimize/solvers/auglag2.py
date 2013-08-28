@@ -18,8 +18,9 @@ import logging
 from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
 from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured, LBFGS_new
+from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new
 from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
-from nlpy.optimize.solvers.lsr1 import LSR1_new
+from nlpy.optimize.solvers.lsr1 import LSR1_new, LSR1_structured_new
 from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
@@ -553,7 +554,7 @@ class AugmentedLagrangianStructuredLbfgs(AugmentedLagrangianStructuredQuasiNewto
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LBFGS_structured(self.nlp.original_n,
+        self.Hessapp = LBFGS_structured_new(self.nlp.original_n,
                        npairs=kwargs.get('qn_pairs',5), scaling=True, **kwargs)
 
 
@@ -565,8 +566,8 @@ class AugmentedLagrangianStructuredLsr1(AugmentedLagrangianStructuredQuasiNewton
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianStructuredQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_structured(self.nlp.original_n,
-                       npairs=kwargs.get('qn_pairs',5),#min(3,self.n)),
+        self.Hessapp = LSR1_structured_new(self.nlp.original_n,
+                       npairs=kwargs.get('qn_pairs',min(3,self.n)),
                        scaling=True, **kwargs)
 
 
