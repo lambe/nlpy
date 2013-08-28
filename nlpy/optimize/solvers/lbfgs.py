@@ -500,6 +500,93 @@ class LBFGS_new(object):
 
 
 
+class LBFGS_structured_new(LBFGS_new):
+    """
+    A structured LBFGS approximation based on the LBFGS_new class.
+    """
+    def __init__(self, n, npairs=5, **kwargs):
+        LBFGS_new.__init__(self, n, npairs, **kwargs)
+        self.yd = []
+        self.ad = self.b # A space saver, since we do not need the b list
+        self.aTs = [None]*self.npairs
+        self.adTs = [None]*self.npairs
+
+
+    def store(self, new_s, new_y, new_yd):
+        """
+        Store the new pair (new_s,new_y). A new pair
+        is only accepted if 
+        s_k' y_k >= `self.accept_threshold`.
+        """
+        ys = numpy.dot(new_s, new_y)
+        if ys > self.accept_threshold:
+            self.s.append(new_s.copy())
+            self.y.append(new_y.copy())
+            self.yd.append(new_yd.copy())            
+            if len(self.s) > self.npairs:
+                del self.s[0]
+                del self.y[0]
+                del self.yd[0]
+            else:
+                self.stored_pairs += 1
+            # end if
+
+            if self.scaling:
+                # ** This scaling criterion should probably change for the structured update
+                self.gamma = ys / numpy.dot(new_y, new_y)
+
+            # Recompute stored data for the matvec computation
+            for i in range(self.stored_pairs):
+                self.a[i] = self.s[i]/self.gamma
+                self.ad[i] = self.yd[i] - self.s[i]/self.gamma
+                for j in range(i):
+                    aTs_temp = np.dot(self.a[j],self.s[i])
+                    adTs_temp = np.dot(self.ad[j],self.s[i])
+                    Delta_s = (aTs_temp/self.aTs[j])*self.ad[j] + (adTs_temp/self.aTs[j])*self.a[j]
+                    Delta_s -= (aTs_temp*self.adTs[j]/self.aTs[j]**2)*self.a[j]
+                    self.a[i] += Delta_s
+                    self.ad[i] -= Delta_s
+                # end for
+                coeff = (np.dot(self.y[i],self.s[i])/np.dot(self.s[i],self.a[i]))**0.5
+                self.a[i] = self.y[i] + coeff*self.a[i]
+                self.aTs[i] = np.dot(self.a[i], self.s[i])
+                self.adTs[i] = np.dot(self.ad[i], self.s[i])
+            # end for
+        else:
+            self.log.debug('Not accepting LBFGS update: ys=%g' % ys)
+        return
+
+
+    def restart(self):
+        """
+        Restart the approximation by clearing all data on past updates.
+        """
+        LBFGS_new.restart(self)
+        self.yd = []
+        # self.ad is cleared when self.b is cleared in the parent method
+        self.adTs = [None]*self.npairs
+        return        
+
+
+    def matvec(self, v):
+        """
+        Compute a matrix-vector product between the current limited-memory
+        approximation to the Hessian matrix and the vector v using
+        the unrolling formula.
+        """
+        self.numMatVecs += 1
+
+        w = v / self.gamma
+        for i in range(self.stored_pairs):
+            aTv = np.dot(self.a[i],v)
+            adTv = np.dot(self.ad[i],v)
+            w += (aTv/self.aTs[i])*self.ad[i] + (adTv/self.aTs[i])*self.a[i]
+            w -= (aTv*self.adTs[i]/self.aTs[i]**2)*self.a[i]
+        # end for
+        return w
+
+
+
 class LBFGSFramework:
     """
     Class LBFGSFramework provides a framework for solving unconstrained
