@@ -164,12 +164,14 @@ class BQP(object):
         self.use_prec = kwargs.get('use_prec',False)
         if not self.use_prec:
             self.Hprec = SimpleLinearOperator(qp.n, qp.n, lambda u: u, symmetric=True)
+            self.exact_prec = True
         else:
             self.Hprec = SimpleLinearOperator(qp.n, qp.n,
                                       lambda u: self.qp.hprod(self.qp.x0,
                                                               None,
                                                               u),
                                       symmetric=True)
+            self.exact_prec = False
 
         # Relative stopping tolerance in projected gradient iterations.
         self.pgrad_reltol = 0.25
@@ -503,22 +505,22 @@ class BQP(object):
             self.log.debug('Starting CG on current face.')
 
             ZHZ = ReducedHessian(self.H, free_vars)
-            ZMZ = ReducedHessian(self.Hprec, free_vars)
             Zg  = g[free_vars]
 
-            # Set up a self-preconditioner for the cg
-            prec_cg = PreconditioningCG(Zg, ZMZ)
+            # Set up a self-preconditioner for the cg, if it exists
+            if self.exact_prec:
+                ZMZ = ReducedHessian(self.Hprec, free_vars)
+            else:
+                ZHprecZ = ReducedHessian(self.Hprec, free_vars)
+                prec_cg = PreconditioningCG(Zg, ZHprecZ)
+                ZMZ = prec_cg.PrecSolve
 
             cg = SufficientDecreaseCG(Zg, ZHZ, #x=x[free_vars],
                                       #Lvar=qp.Lvar[free_vars],
                                       #Uvar=qp.Uvar[free_vars],
                                       detect_stalling=True)
             try:
-                cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=prec_cg.PrecSolve)
-                # if self.use_prec:
-                #     cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=prec_cg.PrecSolve)
-                # else:
-                #     cg.Solve(abstol=1.0e-5, reltol=1.0e-3)
+                cg.Solve(abstol=1.0e-5, reltol=1.0e-3, prec=ZMZ)
             except UserExitRequest:
                 msg  = 'CG is no longer making substantial progress'
                 msg += ' (%d its)' % cg.niter
@@ -580,18 +582,19 @@ class BQP(object):
                 fixed_vars = np.concatenate((lower, upper))
                 free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
                 ZHZ = ReducedHessian(self.H, free_vars)
-                ZMZ = ReducedHessian(self.Hprec, free_vars)
                 Zg  = g[free_vars]
-                prec_cg = PreconditioningCG(Zg, ZMZ)
+                if self.exact_prec:
+                    ZMZ = ReducedHessian(self.Hprec, free_vars)
+                else:
+                    ZHprecZ = ReducedHessian(self.Hprec, free_vars)
+                    prec_cg = PreconditioningCG(Zg, ZHprecZ)
+                    ZMZ = prec_cg.PrecSolve
+                # end if                    
                 cg = SufficientDecreaseCG(Zg, ZHZ,  #x=x[free_vars],
                                           #Lvar=qp.Lvar[free_vars],
                                           #Uvar=qp.Uvar[free_vars],
                                           detect_stalling=True)
-                cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=prec_cg.PrecSolve)
-                # if self.use_prec:
-                #     cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=prec_cg.PrecSolve)
-                # else:
-                #     cg.Solve(absol=1.0e-6, reltol=1.0e-4)
+                cg.Solve(absol=1.0e-6, reltol=1.0e-4, prec=ZMZ)
 
                 msg = 'CG stops (%d its, status = %s)' % (cg.niter, cg.status)
                 self.log.debug(msg)
