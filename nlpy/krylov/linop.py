@@ -299,6 +299,11 @@ class ReducedLinearOperator:
         return y[self.row_indices]
 
 
+    def __call__(self, *args, **kwargs):
+        # An alias for __mul__.
+        return self.__mul__(*args, **kwargs)
+
+
 class SymmetricallyReducedLinearOperator(ReducedLinearOperator):
     def __init__(self, A, row_indices, **kwargs):
         ReducedLinearOperator.__init__(self, A, row_indices, row_indices, **kwargs)
