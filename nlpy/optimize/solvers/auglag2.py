@@ -694,7 +694,7 @@ class AugmentedLagrangianFramework(object):
             on_bound = self.get_active_bounds(self.x)
             not_on_bound = np.setdiff1d(np.arange(self.alprob.n, dtype=np.int), on_bound)
             alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
-            self.alprob.pi -= alpha_opt*self.alprob.rho*convals
+            self.alprob.pi -= max(alpha_opt, 0.)*self.alprob.rho*convals
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
 
