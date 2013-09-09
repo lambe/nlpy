@@ -542,6 +542,7 @@ class AugmentedLagrangianFramework(object):
         self.x = kwargs.get('x0', self.alprob.x0.copy())
 
         self.least_squares_pi = kwargs.get('least_squares_pi', False)
+        self.damped_pi = kwargs.get('damped_pi',True)
 
         self.innerSolver = innerSolver
 
@@ -682,19 +683,22 @@ class AugmentedLagrangianFramework(object):
 
         if self.least_squares_pi:
             self.least_squares_multipliers(self.x)
-        else:
-            # Basic (first-order) multiplier update
-            # self.alprob.pi -= self.alprob.rho*convals
-
-            # More advanced update: minimize the norm of the projected 
-            # gradient of the Lagrangian in the direction of the first-
-            # order update
+        elif self.damped_pi:
+            # Damped update: minimize the norm of the projected gradient 
+            # of the Lagrangian in the direction of the first-order update.
+            #
+            # Maximum damping parameter of 1 prevents multipliers from having 
+            # incorrect sign
             r_igrad = self.alprob.rho*self.alprob.primal_feasibility(self.x)
             dual_feas = self.alprob.dual_feasibility(self.x)
             on_bound = self.get_active_bounds(self.x)
             not_on_bound = np.setdiff1d(np.arange(self.alprob.n, dtype=np.int), on_bound)
             alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
-            self.alprob.pi -= max(alpha_opt, 0.)*self.alprob.rho*convals
+            self.alprob.pi -= min(max(alpha_opt, 0.), 1.)*self.alprob.rho*convals
+        else:
+            # Basic (first-order) multiplier update
+            self.alprob.pi -= self.alprob.rho*convals
+
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
 
