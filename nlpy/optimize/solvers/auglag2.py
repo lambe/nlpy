@@ -538,11 +538,23 @@ class AugmentedLagrangianFramework(object):
         constrained solver.
         """
 
+        # For hotstarts, we need to know what type of augmented Lagrangian the 
+        # problem class is before we start
+        self.alprob_class = kwargs.get('alprob_class',AugmentedLagrangian)
+
         # Options for hotstarting from a previously computed point
         self.hotstart = kwargs.get('hotstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
+        self.save_data = kwargs.get('save_data',True)
 
-        self.alprob = AugmentedLagrangian(nlp,**kwargs)
+        if self.hotstart:
+            rho_start = np.loadtxt(self.data_prefix+'rho.dat')
+            pi_start = np.loadtxt(self.data_prefix+'pi.dat')
+            self.alprob = self.alprob_class(nlp,rho_init=rho_start[0],pi0=pi_start,**kwargs)
+        else:
+            self.alprob = self.alprob_class(nlp,**kwargs)
+        # end if
+
         self.x = kwargs.get('x0', self.alprob.x0.copy())
 
         self.least_squares_pi = kwargs.get('least_squares_pi', False)
@@ -705,7 +717,8 @@ class AugmentedLagrangianFramework(object):
 
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
-            np.savetxt(self.data_prefix+'pi.dat', self.alprob.pi)
+            if self.save_data:
+                np.savetxt(self.data_prefix+'pi.dat', self.alprob.pi)
 
         if status == 'opt':
             # Safeguard: tighten tolerances only if desired optimality
@@ -714,13 +727,24 @@ class AugmentedLagrangianFramework(object):
             self.eta /= self.alprob.rho**self.b_eta
             self.omega /= self.alprob.rho**self.b_omega
             self.inner_fail_count = 0
-        else:
+
+            # Safeguard: tightest tolerance should be near optimality to prevent excessive
+            # inner loop iterations at the end of the algorithm
+            if self.omega < self.omega_opt:
+                self.omega = self.omega_opt
+            if self.eta < self.eta_opt:
+                self.eta = self.eta_opt
+       else:
             self.inner_fail_count += 1
 
         # Save penalty parameter and convergence tolerances
-        np.savetxt(self.data_prefix+'rho.dat',self.alprob.rho)
-        np.savetxt(self.data_prefix+'eta.dat',self.eta)
-        np.savetxt(self.data_prefix+'omega.dat',self.omega)
+        if self.save_data:
+            rho_store = np.array([self.alprob.rho])
+            eta_store = np.array([self.eta])
+            omega_store = np.array([self.omega])
+            np.savetxt(self.data_prefix+'rho.dat',rho_store)
+            np.savetxt(self.data_prefix+'eta.dat',eta_store)
+            np.savetxt(self.data_prefix+'omega.dat',omega_store)
         return
 
 
@@ -732,10 +756,22 @@ class AugmentedLagrangianFramework(object):
         self.alprob.rho /= self.tau
         self.eta = self.eta0*self.alprob.rho**-self.a_eta
         self.omega = self.omega0*self.alprob.rho**-self.a_omega
+
+        # Safeguard: tightest tolerance should be near optimality to prevent excessive
+        # inner loop iterations at the end of the algorithm
+        if self.omega < self.omega_opt:
+            self.omega = self.omega_opt
+        if self.eta < self.eta_opt:
+            self.eta = self.eta_opt
+
         # Save data in case of crash
-        np.savetxt(self.data_prefix+'rho.dat',self.alprob.rho)
-        np.savetxt(self.data_prefix+'eta.dat',self.eta)
-        np.savetxt(self.data_prefix+'omega.dat',self.omega)
+        if self.save_data:
+            rho_store = np.array([self.alprob.rho])
+            eta_store = np.array([self.eta])
+            omega_store = np.array([self.omega])
+            np.savetxt(self.data_prefix+'rho.dat',rho_store)
+            np.savetxt(self.data_prefix+'eta.dat',eta_store)
+            np.savetxt(self.data_prefix+'omega.dat',omega_store)
         return
 
 
@@ -787,6 +823,11 @@ class AugmentedLagrangianFramework(object):
 
         self.omega = self.omega_init
         self.eta = self.eta_init
+        if self.hotstart:
+            omega_arr = np.loadtxt(self.data_prefix+'omega.dat')
+            eta_arr = np.loadtxt(self.data_prefix+'eta.dat')
+            self.omega = omega_arr[0]
+            self.eta = eta_arr[0]
         self.omega_opt = self.omega_rel * self.pg0 + self.omega_abs
         self.eta_opt = self.eta_rel * max_cons + self.eta_abs
 
@@ -818,7 +859,9 @@ class AugmentedLagrangianFramework(object):
             SBMIN = self.innerSolver(self.alprob, tr, TRSolver,
                                      abstol=self.omega, x0=self.x,
                                      maxiter=self.max_inner_iter/10., verbose=True,
-                                     update_on_rejected_step=self.update_on_rejected_step, **kwargs)
+                                     update_on_rejected_step=self.update_on_rejected_step, 
+                                     hotstart=self.hotstart, data_prefix=self.data_prefix, 
+                                     save_data=self.save_data, **kwargs)
 
             SBMIN.Solve()
             self.x = SBMIN.x.copy()
@@ -888,12 +931,6 @@ class AugmentedLagrangianFramework(object):
                     self.log.debug('Problem appears to be infeasible, exiting ... \n')
                     break
 
-            # Safeguard: tightest tolerance should be near optimality to prevent excessive
-            # inner loop iterations at the end of the algorithm
-            if self.omega < self.omega_opt:
-                self.omega = self.omega_opt
-            if self.eta < self.eta_opt:
-                self.eta = self.eta_opt
 
 
             try:
@@ -945,103 +982,117 @@ class AugmentedLagrangianQuasiNewtonFramework(AugmentedLagrangianFramework):
 class AugmentedLagrangianLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianLbfgs(nlp,**kwargs)
+        prob_class = AugmentedLagrangianLbfgs
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianLsr1(nlp,**kwargs)
+        prob_class = AugmentedLagrangianLsr1
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianPartialLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianPartialLbfgs(nlp,**kwargs)
+        prob_class = AugmentedLagrangianPartialLbfgs
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianPartialLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        prob_class = AugmentedLagrangianPartialLsr1
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
-        self.alprob = AugmentedLagrangianPartialLsr1(nlp,**kwargs)
 
 
 
 class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianSplitLbfgs(nlp,**kwargs)
+        prob_class = AugmentedLagrangianSplitLbfgs
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        prob_class = AugmentedLagrangianSplitLsr1
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
-        self.alprob = AugmentedLagrangianSplitLsr1(nlp,**kwargs)
 
 
 
-class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
+# class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
 
-    def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+#     def __init__(self, nlp, innerSolver, **kwargs):
+#         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
 
 
 
 class AugmentedLagrangianTotalLbfgsAdjBroyAFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianTotalLbfgsAdjBroyA(nlp,**kwargs)
+        prob_class = AugmentedLagrangianTotalLbfgsAdjBroyA
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianTotalLbfgsAdjBroyBFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianTotalLbfgsAdjBroyB(nlp,**kwargs)
+        prob_class = AugmentedLagrangianTotalLbfgsAdjBroyB
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianTotalLsr1AdjBroyAFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianTotalLsr1AdjBroyA(nlp,**kwargs)
+        prob_class = AugmentedLagrangianTotalLsr1AdjBroyA
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+        self.update_on_rejected_step = True
 
 
 
 class AugmentedLagrangianTotalLsr1AdjBroyBFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianTotalLsr1AdjBroyB(nlp,**kwargs)
+        prob_class = AugmentedLagrangianTotalLsr1AdjBroyB
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+        self.update_on_rejected_step = True
 
 
 
 class AugmentedLagrangianStructuredLbfgsFramework(AugmentedLagrangianLbfgsFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianLbfgsFramework.__init__(self, nlp, innerSolver, **kwargs)
-        self.alprob = AugmentedLagrangianStructuredLbfgs(nlp,**kwargs)
+        prob_class = AugmentedLagrangianStructuredLbfgs
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
 
 
 
 class AugmentedLagrangianStructuredLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+        prob_class = AugmentedLagrangianStructuredLsr1
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
-        self.alprob = AugmentedLagrangianStructuredLsr1(nlp,**kwargs)
