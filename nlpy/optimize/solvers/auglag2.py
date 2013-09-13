@@ -538,6 +538,10 @@ class AugmentedLagrangianFramework(object):
         constrained solver.
         """
 
+        # Options for hotstarting from a previously computed point
+        self.hotstart = kwargs.get('hotstart',False)
+        self.data_prefix = kwargs.get('data_prefix','./')
+
         self.alprob = AugmentedLagrangian(nlp,**kwargs)
         self.x = kwargs.get('x0', self.alprob.x0.copy())
 
@@ -701,6 +705,7 @@ class AugmentedLagrangianFramework(object):
 
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
+            np.savetxt(self.data_prefix+'pi.dat', self.alprob.pi)
 
         if status == 'opt':
             # Safeguard: tighten tolerances only if desired optimality
@@ -711,6 +716,11 @@ class AugmentedLagrangianFramework(object):
             self.inner_fail_count = 0
         else:
             self.inner_fail_count += 1
+
+        # Save penalty parameter and convergence tolerances
+        np.savetxt(self.data_prefix+'rho.dat',self.alprob.rho)
+        np.savetxt(self.data_prefix+'eta.dat',self.eta)
+        np.savetxt(self.data_prefix+'omega.dat',self.omega)
         return
 
 
@@ -722,6 +732,10 @@ class AugmentedLagrangianFramework(object):
         self.alprob.rho /= self.tau
         self.eta = self.eta0*self.alprob.rho**-self.a_eta
         self.omega = self.omega0*self.alprob.rho**-self.a_omega
+        # Save data in case of crash
+        np.savetxt(self.data_prefix+'rho.dat',self.alprob.rho)
+        np.savetxt(self.data_prefix+'eta.dat',self.eta)
+        np.savetxt(self.data_prefix+'omega.dat',self.omega)
         return
 
 
