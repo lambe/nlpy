@@ -550,7 +550,8 @@ class AugmentedLagrangianFramework(object):
         if self.hotstart:
             rho_start = np.loadtxt(self.data_prefix+'rho.dat')
             pi_start = np.loadtxt(self.data_prefix+'pi.dat')
-            self.alprob = self.alprob_class(nlp,rho_init=rho_start[0],pi0=pi_start,**kwargs)
+            self.alprob = self.alprob_class(nlp,rho_init=rho_start,
+                pi0=pi_start,**kwargs)
         else:
             self.alprob = self.alprob_class(nlp,**kwargs)
         # end if
@@ -734,7 +735,7 @@ class AugmentedLagrangianFramework(object):
                 self.omega = self.omega_opt
             if self.eta < self.eta_opt:
                 self.eta = self.eta_opt
-       else:
+        else:
             self.inner_fail_count += 1
 
         # Save penalty parameter and convergence tolerances
@@ -824,10 +825,8 @@ class AugmentedLagrangianFramework(object):
         self.omega = self.omega_init
         self.eta = self.eta_init
         if self.hotstart:
-            omega_arr = np.loadtxt(self.data_prefix+'omega.dat')
-            eta_arr = np.loadtxt(self.data_prefix+'eta.dat')
-            self.omega = omega_arr[0]
-            self.eta = eta_arr[0]
+            self.omega = np.loadtxt(self.data_prefix+'omega.dat')
+            self.eta = np.loadtxt(self.data_prefix+'eta.dat')
         self.omega_opt = self.omega_rel * self.pg0 + self.omega_abs
         self.eta_opt = self.eta_rel * max_cons + self.eta_abs
 

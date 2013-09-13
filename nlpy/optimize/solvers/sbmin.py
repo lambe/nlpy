@@ -231,8 +231,7 @@ class SBMINFramework(object):
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
         if self.hotstart:
-            delta_arr = np.loadtxt(self.data_prefix+'tr_Delta.dat')
-            self.TR.Delta = delta_arr[0]
+            self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta.dat')
         self.radii = [self.TR.Delta]
 
         # Initialize non-monotonicity parameters.
