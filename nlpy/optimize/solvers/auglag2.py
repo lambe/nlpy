@@ -553,7 +553,8 @@ class AugmentedLagrangianFramework(object):
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
                 pi0=pi_start,**kwargs)
         else:
-            self.alprob = self.alprob_class(nlp,**kwargs)
+            self.alprob = self.alprob_class(nlp,hotstart=self.hotstart,
+                data_prefix=self.data_prefix,save_data=self.save_data,**kwargs)
         # end if
 
         self.x = kwargs.get('x0', self.alprob.x0.copy())
