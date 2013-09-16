@@ -69,6 +69,11 @@ class NonsquareQuasiNewton:
         self.numMatVecs = 0
         self.numRMatVecs = 0
 
+        # If a hotstart is used, pull existing data from the specified file
+        self.hotstart_init = kwargs.get('hotstart',False)
+        self.data_prefix = kwargs.get('data_prefix','./')
+        self.save_data = kwargs.get('save_data',True)
+
         return
 
 
@@ -87,35 +92,40 @@ class NonsquareQuasiNewton:
         """
         self.x = x
 
-        self.A = np.zeros([self.m_dense,self.n_dense])
-        if self.m_dense < self.n_dense:
-            unitvec = np.zeros(self.m)
-            for k in range(self.m_dense):
-                unitvec[k-1] = 0.
-                unitvec[k] = 1.
-                full_prod = self.jtprod(self.x, unitvec)
-                self.A[k,:] = full_prod[:self.n_dense]
+        if self.hotstart_init:
+            self.A = np.loadtxt(self.data_prefix+'approxJ.dat')
+            self.hotstart_init = False  # In case another restart is needed later
         else:
-            unitvec = np.zeros(self.n)
-            for k in range(self.n_dense):
-                unitvec[k-1] = 0.
-                unitvec[k] = 1.
-                full_prod = self.jprod(self.x, unitvec)
-                self.A[:,k] = full_prod[:self.m_dense]
+            self.A = np.zeros([self.m_dense,self.n_dense])
+            if self.m_dense < self.n_dense:
+                unitvec = np.zeros(self.m)
+                for k in range(self.m_dense):
+                    unitvec[k-1] = 0.
+                    unitvec[k] = 1.
+                    full_prod = self.jtprod(self.x, unitvec)
+                    self.A[k,:] = full_prod[:self.n_dense]
+            else:
+                unitvec = np.zeros(self.n)
+                for k in range(self.n_dense):
+                    unitvec[k-1] = 0.
+                    unitvec[k] = 1.
+                    full_prod = self.jprod(self.x, unitvec)
+                    self.A[:,k] = full_prod[:self.m_dense]
 
-        # Alternative test 1: A zero Jacobian
-        # Nothing to do
+            # Alternative test 1: A zero Jacobian
+            # Nothing to do
 
-        # Alternative test 2: An identity matrix
-        # for k in range(min(self.m,self.slack_index)):
-        #     self.A[k,k] = 1.
+            # Alternative test 2: An identity matrix
+            # for k in range(min(self.m,self.slack_index)):
+            #     self.A[k,k] = 1.
 
-        # # Account for slack variable part of Jacobian (cheap with SlackNLP class)
-        # unitvec = np.zeros(self.n)
-        # for k in range(self.slack_index,self.n):
-        #     unitvec[k-1] = 0.
-        #     unitvec[k] = 1.
-        #     self.A[:,k] = self.jprod(self.x, unitvec)
+            # # Account for slack variable part of Jacobian (cheap with SlackNLP class)
+            # unitvec = np.zeros(self.n)
+            # for k in range(self.slack_index,self.n):
+            #     unitvec[k-1] = 0.
+            #     unitvec[k] = 1.
+            #     self.A[:,k] = self.jprod(self.x, unitvec)
+        # end if
 
         self._vecfunc = self.vecfunc(self.x)
         return
@@ -150,6 +160,15 @@ class NonsquareQuasiNewton:
         A utility function to return the full (dense part of the) matrix.
         """
         return self.A
+
+
+    def save_mat(self):
+        """
+        Save the matrix to a text file in case of premature stop.
+        """
+        if self.save_data:
+            np.savetxt(self.data_prefix+'approxJ.dat',self.A)
+        return
 
 
 
@@ -315,6 +334,7 @@ class adjointBroydenA(NonsquareQuasiNewton):
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
             self.A += np.outer(sigma_unit,tau)
+        self.save_mat()
         return
 
 
@@ -359,6 +379,7 @@ class adjointBroydenB(NonsquareQuasiNewton):
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
             self.A += np.outer(sigma_unit,tau)
+        self.save_mat()
         return
 
 

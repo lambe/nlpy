@@ -93,6 +93,11 @@ class SBMINFramework(object):
         self.true_step = None
         self.update_on_rejected_step = kwargs.get('update_on_rejected_step', False)
 
+        # Options for handling the hotstarting case
+        self.hotstart = kwargs.get('hotstart',False)
+        self.data_prefix = kwargs.get('data_prefix','./')
+        self.save_data = kwargs.get('save_data',True)
+
         # Options for Nocedal-Yuan backtracking
         self.ny      = kwargs.get('ny', False)
         self.nbk     = kwargs.get('nbk', 5)
@@ -184,6 +189,10 @@ class SBMINFramework(object):
         Override this method to perform work at the end of an iteration. For
         example, use this method for updating a LBFGS Hessian
         """
+        if self.save_data:
+            np.savetxt(self.data_prefix+'x.dat',self.x)
+            delta_store = np.array([self.TR.Delta])
+            np.savetxt(self.data_prefix+'tr_Delta.dat',delta_store)
         return None
 
 
@@ -221,6 +230,8 @@ class SBMINFramework(object):
 
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
+        if self.hotstart:
+            self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta.dat')
         self.radii = [self.TR.Delta]
 
         # Initialize non-monotonicity parameters.
@@ -468,6 +479,7 @@ class SBMINLqnFramework(SBMINFramework):
 
         The update only takes place on *successful* iterations.
         """
+        SBMINFramework.PostIteration(self, **kwargs)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step.copy()
             y = self.g - self.g_old
@@ -499,6 +511,7 @@ class SBMINPartialLqnFramework(SBMINFramework):
 
         The update only takes place on *successful* iterations.
         """
+        SBMINFramework.PostIteration(self, **kwargs)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.x - self.x_old
             y = self.lg - self.lg_old
@@ -534,6 +547,7 @@ class SBMINSplitLqnFramework(SBMINFramework):
 
         The update only takes place on *successful* iterations.
         """
+        SBMINFramework.PostIteration(self, **kwargs)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.x - self.x_old
             y = self.lg - self.lg_old
@@ -569,6 +583,7 @@ class SBMINStructuredLqnFramework(SBMINFramework):
         appending the most recent (s,y) pair to it and possibly discarding the
         oldest one if all the memory has been used.
         """
+        SBMINFramework.PostIteration(self, **kwargs)
         # Quasi-Newton approximation update on *successful* iterations
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.x - self.x_old
@@ -627,6 +642,7 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
 
         The update only takes place on *successful* iterations.
         """
+        SBMINFramework.PostIteration(self, **kwargs)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step
             y = self.lg - self.lg_old
