@@ -11,7 +11,8 @@ import numpy as np
 import numpy.linalg
 import logging
 import sys
-import pdb
+
+from mpi4py import MPI
 
 __docformat__ = 'restructuredtext'
 
@@ -74,6 +75,23 @@ class NonsquareQuasiNewton:
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
 
+        # MPI data for faster matvecs and rmatvecs
+        # Rougly equal partition of all rows
+        self.comm = MPI.COMM_WORLD
+        size = self.comm.Get_size()
+        rank = self.comm.Get_rank()
+        mpi_lo = rank*self.n_dense/size
+        mpi_hi = (rank+1)*self.n_dense/size
+        mpi_num_rows = mpi_hi - mpi_lo
+
+        # Numpy index arrays for scatterv and gatherv functions
+        self.inds = self.comm.allgather(mpi_lo)
+        self.sizes = self.comm.allgather(mpi_num_rows)
+        self.inds = np.array(self.inds)
+        self.sizes = np.array(self.sizes)
+        self.inds_full = self.inds*self.n_dense
+        self.sizes_full = self.sizes*self.n_dense
+
         return
 
 
@@ -131,6 +149,42 @@ class NonsquareQuasiNewton:
         return
 
 
+    def dense_matvec(self, v_block):
+        """
+        Compute the appropriate product with the dense block of the 
+        approximation. MPI may or may not be used here.
+        """
+        # w = np.dot(self.A,v_block)
+
+        # Distributed matvec
+        rank = self.comm.Get_rank()
+        A_block = np.zeros([self.sizes[rank],self.n_dense])
+        self.comm.Scatterv([self.A, self.sizes_full, self.inds_full, MPI.DOUBLE], [A_block, MPI.DOUBLE], root=0)
+        w_block = np.dot(A_block,v_block)
+        w = np.zeros(self.m_dense)
+        self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
+        return w
+
+
+    def dense_rmatvec(self, w_block):
+        """
+        Compute the appropriate product with the dense block of the 
+        approximation. MPI may or may not be used here.
+        """
+        # v = np.dot(w_block,self.A)
+
+        # Distributed rmatvec
+        rank = self.comm.Get_rank()
+        A_block = np.zeros([self.sizes[rank],self.n_dense])
+        w_mini = np.zeros(self.sizes[rank])
+        self.comm.Scatterv([self.A, self.sizes_full, self.inds_full, MPI.DOUBLE], [A_block, MPI.DOUBLE], root=0)
+        self.comm.Scatterv([w_block, self.sizes, self.inds, MPI.DOUBLE], [w_mini, MPI.DOUBLE], root=0)
+        v_block = np.dot(w_mini,A_block)
+        v = np.zeros(self.n_dense)
+        self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
+        return v
+
+
     def matvec(self, v):
         """
         Compute a matrix-vector product between the current approximation and 
@@ -139,7 +193,8 @@ class NonsquareQuasiNewton:
         """
         self.numMatVecs += 1
         w = self.jprod(self.x, v, sparse_only=True)
-        w[:self.m_dense] += np.dot(self.A,v[:self.n_dense])
+        # w[:self.m_dense] += np.dot(self.A,v[:self.n_dense])
+        w[:self.m_dense] += self.dense_matvec(v[:self.n_dense])
         return w
 
 
@@ -151,7 +206,8 @@ class NonsquareQuasiNewton:
         self.numRMatVecs += 1
         v = self.jtprod(self.x, w, sparse_only=True)
         # A dot-product shortcut provided w stays a vector
-        v[:self.n_dense] += np.dot(w[:self.m_dense],self.A)
+        # v[:self.n_dense] += np.dot(w[:self.m_dense],self.A)
+        v[:self.n_dense] += self.dense_rmatvec(w[:self.m_dense])
         return v
 
 
@@ -202,7 +258,8 @@ class Broyden(NonsquareQuasiNewton):
             vecfunc_new = self.vecfunc(new_x)
             new_y = vecfunc_new - self._vecfunc
             sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
-            As = np.dot(self.A, new_s[:slack])
+            # As = np.dot(self.A, new_s[:slack])
+            As = self.dense_matvec(new_s[:slack])
             yAs = new_y[:sparse] - As - sparse_prod[:sparse]
             self.A += np.outer(yAs, new_s[:slack]) / s2
             self._vecfunc = vecfunc_new
@@ -236,7 +293,8 @@ class modBroyden(NonsquareQuasiNewton):
         if s2 > self.accept_threshold:
             s_long = np.zeros(self.n)
             s_long[:slack] = s_unit
-            As = np.dot(self.A, s_unit)
+            # As = np.dot(self.A, s_unit)
+            self.dense_matvec(s_unit)
             sparse_prod = self.jprod(self.x, s_long, sparse_only=True)
             full_prod = self.jprod(self.x, s_long)
             Js = full_prod[:sparse] - sparse_prod[:sparse]
@@ -267,7 +325,8 @@ class directBroydenA(NonsquareQuasiNewton):
         sparse = self.sparse_index
 
         self._vecfunc = self.vecfunc(new_x)
-        ATh = np.dot(self._vecfunc[:sparse],self.A)
+        # ATh = np.dot(self._vecfunc[:sparse],self.A)
+        ATh = self.dense_rmatvec(self._vecfunc[:sparse])
         full_prod = self.jtprod(self.x, self._vecfunc)
         sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
         JTh = full_prod[:slack] - sparse_prod[:slack]
@@ -279,7 +338,8 @@ class directBroydenA(NonsquareQuasiNewton):
         if rho2 > self.accept_threshold:
             rho_long = np.zeros(self.n)
             rho_long[:slack] = rho_unit
-            Ar = np.dot(self.A, rho_unit)
+            # Ar = np.dot(self.A, rho_unit)
+            Ar = self.dense_matvec(rho_unit)
             full_prod = self.jprod(self.x, rho_long)
             sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
             Jr = full_prod[:sparse] - sparse_prod[:sparse]
@@ -316,7 +376,8 @@ class adjointBroydenA(NonsquareQuasiNewton):
         slack = self.slack_index
         sparse = self.sparse_index
 
-        As = np.dot(self.A,new_s[:slack])
+        # As = np.dot(self.A,new_s[:slack])
+        As = self.dense_matvec(new_s[:slack])
         full_prod = self.jprod(self.x, new_s)
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
         Js = full_prod[:sparse] - sparse_prod[:sparse]
@@ -328,7 +389,8 @@ class adjointBroydenA(NonsquareQuasiNewton):
         if sigma2 > self.accept_threshold:
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma_unit
-            ATsigma = np.dot(sigma_unit, self.A)
+            # ATsigma = np.dot(sigma_unit, self.A)
+            ATsigma = self.dense_rmatvec(sigma_unit)
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
@@ -359,7 +421,8 @@ class adjointBroydenB(NonsquareQuasiNewton):
         slack = self.slack_index
         sparse = self.sparse_index
 
-        As = np.dot(self.A, new_s[:slack])
+        # As = np.dot(self.A, new_s[:slack])
+        As = self.dense_matvec(new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
@@ -373,7 +436,8 @@ class adjointBroydenB(NonsquareQuasiNewton):
         if sigma2 > self.accept_threshold:
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma_unit
-            ATsigma = np.dot(sigma_unit, self.A)
+            # ATsigma = np.dot(sigma_unit, self.A)
+            ATsigma = self.dense_rmatvec(sigma_unit)
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
@@ -413,7 +477,8 @@ class mixedBroyden(NonsquareQuasiNewton):
         sparse = self.sparse_index
 
         # Part 1: form adjoint Broyden B update vectors
-        As = np.dot(self.A, new_s[:slack])
+        # As = np.dot(self.A, new_s[:slack])
+        As = self.dense_matvec(new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
@@ -426,7 +491,8 @@ class mixedBroyden(NonsquareQuasiNewton):
         sigma_unit = sigma/sigma_len
 
         # Part 2: form direct Broyden A update vectors
-        ATh = np.dot(self._vecfunc[:sparse],self.A)
+        # ATh = np.dot(self._vecfunc[:sparse],self.A)
+        ATh = self.dense_rmatvec(self._vecfunc[:sparse])
         full_prod = self.jtprod(self.x, self._vecfunc)
         sparse_prod = self.jtprod(self.x, self._vecfunc, sparse_only=True)
         JTh = full_prod[:slack] - sparse_prod[:slack]
@@ -440,7 +506,8 @@ class mixedBroyden(NonsquareQuasiNewton):
         if sigma2 > self.accept_threshold:
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma_unit
-            ATsigma = np.dot(sigma_unit, self.A)
+            # ATsigma = np.dot(sigma_unit, self.A)
+            ATsigma = self.dense_rmatvec(sigma_unit)
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
@@ -450,7 +517,8 @@ class mixedBroyden(NonsquareQuasiNewton):
         if rho2 > self.accept_threshold:
             rho_long = np.zeros(self.n)
             rho_long[:slack] = rho_unit
-            Ar = np.dot(self.A, rho_unit)
+            # Ar = np.dot(self.A, rho_unit)
+            Ar = self.dense_matvec(rho_unit)
             full_prod = self.jprod(self.x, rho_long)
             sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
             Jr = full_prod[:sparse] - sparse_prod[:sparse]
@@ -490,7 +558,8 @@ class TR1B(NonsquareQuasiNewton):
         sparse = self.sparse_index
         self.x = new_x
 
-        As = np.dot(self.A,new_s[:slack])
+        # As = np.dot(self.A,new_s[:slack])
+        As = self.dense_matvec(new_s[:slack])
         vecfunc_new = self.vecfunc(new_x)
         y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
         self._vecfunc = vecfunc_new
@@ -506,7 +575,8 @@ class TR1B(NonsquareQuasiNewton):
         if abs(denom) > self.accept_threshold*norm_prod:
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma
-            ATsigma = np.dot(sigma, self.A)
+            # ATsigma = np.dot(sigma, self.A)
+            ATsigma = self.dense_rmatvec(sigma)
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
