@@ -553,8 +553,7 @@ class AugmentedLagrangianFramework(object):
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
                 pi0=pi_start,**kwargs)
         else:
-            self.alprob = self.alprob_class(nlp,hotstart=self.hotstart,
-                data_prefix=self.data_prefix,save_data=self.save_data,**kwargs)
+            self.alprob = self.alprob_class(nlp,**kwargs)
         # end if
 
         self.x = kwargs.get('x0', self.alprob.x0.copy())
@@ -822,6 +821,7 @@ class AugmentedLagrangianFramework(object):
         else:
             max_cons = np.max(np.abs(self.alprob.nlp.cons(self.x)))
             cons_norm_ref = max_cons
+        max_cons_new = max_cons
 
         self.omega = self.omega_init
         self.eta = self.eta_init
