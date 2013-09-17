@@ -222,7 +222,7 @@ class NonsquareQuasiNewton:
         """
         Save the matrix to a text file in case of premature stop.
         """
-        if self.save_data:
+        if self.save_data and self.comm.Get_rank() == 0:
             np.savetxt(self.data_prefix+'approxJ.dat',self.A)
         return
 
