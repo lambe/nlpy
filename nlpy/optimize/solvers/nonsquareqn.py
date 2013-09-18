@@ -79,9 +79,9 @@ class NonsquareQuasiNewton:
         # Rougly equal partition of all rows
         self.comm = MPI.COMM_WORLD
         size = self.comm.Get_size()
-        rank = self.comm.Get_rank()
-        mpi_lo = rank*self.n_dense/size
-        mpi_hi = (rank+1)*self.n_dense/size
+        self.rank = self.comm.Get_rank()
+        mpi_lo = self.rank*self.n_dense/size
+        mpi_hi = (self.rank+1)*self.n_dense/size
         mpi_num_rows = mpi_hi - mpi_lo
 
         # Numpy index arrays for scatterv and gatherv functions
@@ -157,10 +157,9 @@ class NonsquareQuasiNewton:
         # w = np.dot(self.A,v_block)
 
         # Distributed matvec
-        rank = self.comm.Get_rank()
-        A_block = np.zeros([self.sizes[rank],self.n_dense])
-        self.comm.Scatterv([self.A, self.sizes_full, self.inds_full, MPI.DOUBLE], [A_block, MPI.DOUBLE], root=0)
-        w_block = np.dot(A_block,v_block)
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
+        w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
         w = np.zeros(self.m_dense)
         self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
         return w
@@ -174,12 +173,9 @@ class NonsquareQuasiNewton:
         # v = np.dot(w_block,self.A)
 
         # Distributed rmatvec
-        rank = self.comm.Get_rank()
-        A_block = np.zeros([self.sizes[rank],self.n_dense])
-        w_mini = np.zeros(self.sizes[rank])
-        self.comm.Scatterv([self.A, self.sizes_full, self.inds_full, MPI.DOUBLE], [A_block, MPI.DOUBLE], root=0)
-        self.comm.Scatterv([w_block, self.sizes, self.inds, MPI.DOUBLE], [w_mini, MPI.DOUBLE], root=0)
-        v_block = np.dot(w_mini,A_block)
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
+        v_block = np.dot(w_block[lo_ind:hi_ind],self.A[lo_ind:hi_ind,:])
         v = np.zeros(self.n_dense)
         self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
         return v
@@ -222,7 +218,7 @@ class NonsquareQuasiNewton:
         """
         Save the matrix to a text file in case of premature stop.
         """
-        if self.save_data and self.comm.Get_rank() == 0:
+        if self.save_data:
             np.savetxt(self.data_prefix+'approxJ.dat',self.A)
         return
 
