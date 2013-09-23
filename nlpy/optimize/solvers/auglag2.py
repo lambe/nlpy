@@ -545,11 +545,12 @@ class AugmentedLagrangianFramework(object):
         # Options for hotstarting from a previously computed point
         self.hotstart = kwargs.get('hotstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
+        self.data_suffix = kwargs.get('data_suffix','')
         self.save_data = kwargs.get('save_data',True)
 
         if self.hotstart:
-            rho_start = np.loadtxt(self.data_prefix+'rho.dat')
-            pi_start = np.loadtxt(self.data_prefix+'pi.dat')
+            rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
+            pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
                 pi0=pi_start,**kwargs)
         else:
@@ -719,7 +720,7 @@ class AugmentedLagrangianFramework(object):
         if self.alprob.nlp.m != 0:
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
             if self.save_data:
-                np.savetxt(self.data_prefix+'pi.dat', self.alprob.pi)
+                np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
 
         if status == 'opt':
             # Safeguard: tighten tolerances only if desired optimality
@@ -743,9 +744,9 @@ class AugmentedLagrangianFramework(object):
             rho_store = np.array([self.alprob.rho])
             eta_store = np.array([self.eta])
             omega_store = np.array([self.omega])
-            np.savetxt(self.data_prefix+'rho.dat',rho_store)
-            np.savetxt(self.data_prefix+'eta.dat',eta_store)
-            np.savetxt(self.data_prefix+'omega.dat',omega_store)
+            np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
+            np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
+            np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
         return
 
 
@@ -770,9 +771,9 @@ class AugmentedLagrangianFramework(object):
             rho_store = np.array([self.alprob.rho])
             eta_store = np.array([self.eta])
             omega_store = np.array([self.omega])
-            np.savetxt(self.data_prefix+'rho.dat',rho_store)
-            np.savetxt(self.data_prefix+'eta.dat',eta_store)
-            np.savetxt(self.data_prefix+'omega.dat',omega_store)
+            np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
+            np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
+            np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
         return
 
 
@@ -826,8 +827,8 @@ class AugmentedLagrangianFramework(object):
         self.omega = self.omega_init
         self.eta = self.eta_init
         if self.hotstart:
-            self.omega = np.loadtxt(self.data_prefix+'omega.dat')
-            self.eta = np.loadtxt(self.data_prefix+'eta.dat')
+            self.omega = np.loadtxt(self.data_prefix+'omega'+self.data_suffix+'.dat')
+            self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
         self.omega_opt = self.omega_rel * self.pg0 + self.omega_abs
         self.eta_opt = self.eta_rel * max_cons + self.eta_abs
 
@@ -861,7 +862,8 @@ class AugmentedLagrangianFramework(object):
                                      maxiter=self.max_inner_iter/10., verbose=True,
                                      update_on_rejected_step=self.update_on_rejected_step, 
                                      hotstart=self.hotstart, data_prefix=self.data_prefix, 
-                                     save_data=self.save_data, **kwargs)
+                                     save_data=self.save_data, data_suffix=self.data_suffix,
+                                     **kwargs)
 
             SBMIN.Solve()
             self.x = SBMIN.x.copy()
