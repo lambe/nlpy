@@ -159,9 +159,12 @@ class NonsquareQuasiNewton:
         # Distributed matvec
         lo_ind = self.inds[self.rank]
         hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-        w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
+        # w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
+        # w = np.zeros(self.m_dense)
+        # self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
+        w_block = np.dot(self.A[:,lo_ind:hi_ind],v_block[lo_ind:hi_ind])
         w = np.zeros(self.m_dense)
-        self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
+        self.comm.Allreduce([w_block, MPI.DOUBLE], [w, MPI.DOUBLE], MPI.SUM)
         return w
 
 
