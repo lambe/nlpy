@@ -159,12 +159,12 @@ class NonsquareQuasiNewton:
         # Distributed matvec
         lo_ind = self.inds[self.rank]
         hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-        # w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
-        # w = np.zeros(self.m_dense)
-        # self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
-        w_block = np.dot(self.A[:,lo_ind:hi_ind],v_block[lo_ind:hi_ind])
+        w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
         w = np.zeros(self.m_dense)
-        self.comm.Allreduce([w_block, MPI.DOUBLE], [w, MPI.DOUBLE], MPI.SUM)
+        self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
+        # w_block = np.dot(self.A[:,lo_ind:hi_ind],v_block[lo_ind:hi_ind])
+        # w = np.zeros(self.m_dense)
+        # self.comm.Allreduce([w_block, MPI.DOUBLE], [w, MPI.DOUBLE], MPI.SUM)
         return w
 
 
@@ -178,9 +178,12 @@ class NonsquareQuasiNewton:
         # Distributed rmatvec
         lo_ind = self.inds[self.rank]
         hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-        v_block = np.dot(w_block[lo_ind:hi_ind],self.A[lo_ind:hi_ind,:])
+        # v_block = np.dot(w_block[lo_ind:hi_ind],self.A[lo_ind:hi_ind,:])
+        # v = np.zeros(self.n_dense)
+        # self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
+        v_block = np.dot(w_block,self.A[:,lo_ind:hi_ind])
         v = np.zeros(self.n_dense)
-        self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
+        self.comm.Allgatherv([v_block, MPI.DOUBLE], [v, self.sizes, self.inds, MPI.DOUBLE])
         return v
 
 
