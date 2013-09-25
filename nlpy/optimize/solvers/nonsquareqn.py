@@ -74,6 +74,7 @@ class NonsquareQuasiNewton:
         self.hotstart_init = kwargs.get('hotstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
+        self.data_suffix = kwargs.get('data_suffix','')
 
         # MPI data for faster matvecs and rmatvecs
         # Rougly equal partition of all rows
@@ -111,7 +112,7 @@ class NonsquareQuasiNewton:
         self.x = x
 
         if self.hotstart_init:
-            self.A = np.loadtxt(self.data_prefix+'approxJ.dat')
+            self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
             self.hotstart_init = False  # In case another restart is needed later
         else:
             self.A = np.zeros([self.m_dense,self.n_dense])
@@ -225,7 +226,7 @@ class NonsquareQuasiNewton:
         Save the matrix to a text file in case of premature stop.
         """
         if self.save_data:
-            np.savetxt(self.data_prefix+'approxJ.dat',self.A)
+            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix'.dat',self.A)
         return
 
 
