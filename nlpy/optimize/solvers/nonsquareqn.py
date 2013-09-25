@@ -58,7 +58,7 @@ class NonsquareQuasiNewton:
         self.n_dense = self.slack_index
 
         # Initial estimate of approximation
-        self.A = np.zeros([self.m_dense,self.n_dense])
+        # self.A = np.zeros([self.m_dense,self.n_dense])
 
         # Initial function values (uninitialized at start)
         self._vecfunc = np.zeros(m)
@@ -85,7 +85,10 @@ class NonsquareQuasiNewton:
         mpi_hi = (self.rank+1)*self.n_dense/size
         mpi_num_rows = mpi_hi - mpi_lo
 
-        # Numpy index arrays for scatterv and gatherv functions
+        # The part of the approximate Jacobian stored locally
+        self.A_part = np.zeros([mpi_num_rows, self.n_dense])
+
+        # Numpy index arrays for MPI functions
         self.inds = self.comm.allgather(mpi_lo)
         self.sizes = self.comm.allgather(mpi_num_rows)
         self.inds = np.array(self.inds)
@@ -112,24 +115,36 @@ class NonsquareQuasiNewton:
         self.x = x
 
         if self.hotstart_init:
-            self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
+            # self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
+            self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+self.rank+'.dat')
             self.hotstart_init = False  # In case another restart is needed later
         else:
-            self.A = np.zeros([self.m_dense,self.n_dense])
+            # self.A = np.zeros([self.m_dense,self.n_dense])
+            self.A_part = np.zeros([self.sizes[self.rank], self.n_dense])
             if self.m_dense < self.n_dense:
                 unitvec = np.zeros(self.m)
-                for k in range(self.m_dense):
+                # for k in range(self.m_dense):
+                #     unitvec[k-1] = 0.
+                #     unitvec[k] = 1.
+                #     full_prod = self.jtprod(self.x, unitvec)
+                #     self.A[k,:] = full_prod[:self.n_dense]
+                lo_ind = self.inds[self.rank]
+                hi_ind = self.inds[self.rank] + self.sizes[self.rank]
+                for k in range(lo_ind, hi_ind):
                     unitvec[k-1] = 0.
                     unitvec[k] = 1.
                     full_prod = self.jtprod(self.x, unitvec)
-                    self.A[k,:] = full_prod[:self.n_dense]
+                    self.A_part[k-lo_ind,:] = full_prod[:self.n_dense]
             else:
                 unitvec = np.zeros(self.n)
+                lo_ind = self.inds[self.rank]
+                hi_ind = self.inds[self.rank] + self.sizes[self.rank]
                 for k in range(self.n_dense):
                     unitvec[k-1] = 0.
                     unitvec[k] = 1.
                     full_prod = self.jprod(self.x, unitvec)
-                    self.A[:,k] = full_prod[:self.m_dense]
+                    # self.A[:,k] = full_prod[:self.m_dense]
+                    self.A_part[:,k] = full_prod[lo_ind:hi_ind]
 
             # Alternative test 1: A zero Jacobian
             # Nothing to do
@@ -160,12 +175,10 @@ class NonsquareQuasiNewton:
         # Distributed matvec
         lo_ind = self.inds[self.rank]
         hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-        w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
+        # w_block = np.dot(self.A[lo_ind:hi_ind,:],v_block)
+        w_block = np.dot(self.A_part, v_block)
         w = np.zeros(self.m_dense)
         self.comm.Allgatherv([w_block, MPI.DOUBLE], [w, self.sizes, self.inds, MPI.DOUBLE])
-        # w_block = np.dot(self.A[:,lo_ind:hi_ind],v_block[lo_ind:hi_ind])
-        # w = np.zeros(self.m_dense)
-        # self.comm.Allreduce([w_block, MPI.DOUBLE], [w, MPI.DOUBLE], MPI.SUM)
         return w
 
 
@@ -180,11 +193,9 @@ class NonsquareQuasiNewton:
         lo_ind = self.inds[self.rank]
         hi_ind = self.inds[self.rank] + self.sizes[self.rank]
         # v_block = np.dot(w_block[lo_ind:hi_ind],self.A[lo_ind:hi_ind,:])
-        # v = np.zeros(self.n_dense)
-        # self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
-        v_block = np.dot(w_block,self.A[:,lo_ind:hi_ind])
+        v_block = np.dot(w_block[lo_ind:hi_ind],self.A_part)
         v = np.zeros(self.n_dense)
-        self.comm.Allgatherv([v_block, MPI.DOUBLE], [v, self.sizes, self.inds, MPI.DOUBLE])
+        self.comm.Allreduce([v_block, MPI.DOUBLE], [v, MPI.DOUBLE], MPI.SUM)
         return v
 
 
@@ -218,7 +229,8 @@ class NonsquareQuasiNewton:
         """
         A utility function to return the full (dense part of the) matrix.
         """
-        return self.A
+        # return self.A
+        return self.A_part
 
 
     def save_mat(self):
@@ -226,7 +238,8 @@ class NonsquareQuasiNewton:
         Save the matrix to a text file in case of premature stop.
         """
         if self.save_data:
-            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix'.dat',self.A)
+            # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat',self.A)
+            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+self.rank+'.dat',self.A_part)
         return
 
 
@@ -256,6 +269,9 @@ class Broyden(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
+
         s2 = numpy.dot(new_s[:slack],new_s[:slack])
         if s2 > self.accept_threshold:
             vecfunc_new = self.vecfunc(new_x)
@@ -264,7 +280,8 @@ class Broyden(NonsquareQuasiNewton):
             # As = np.dot(self.A, new_s[:slack])
             As = self.dense_matvec(new_s[:slack])
             yAs = new_y[:sparse] - As - sparse_prod[:sparse]
-            self.A += np.outer(yAs, new_s[:slack]) / s2
+            # self.A += np.outer(yAs, new_s[:slack]) / s2
+            self.A_part += np.outer(yAs[lo_ind:hi_ind], new_s[:slack]) / s2
             self._vecfunc = vecfunc_new
         return
 
@@ -289,6 +306,8 @@ class modBroyden(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         s2 = numpy.dot(new_s[:slack],new_s[:slack])
         s_len = s2**0.5
@@ -302,7 +321,8 @@ class modBroyden(NonsquareQuasiNewton):
             full_prod = self.jprod(self.x, s_long)
             Js = full_prod[:sparse] - sparse_prod[:sparse]
             r = Js - As
-            self.A += np.outer(r, s_unit)
+            # self.A += np.outer(r, s_unit)
+            self.A_part += np.outer(r[lo_ind:hi_ind], s_unit)
         return
 
 
@@ -326,6 +346,8 @@ class directBroydenA(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         self._vecfunc = self.vecfunc(new_x)
         # ATh = np.dot(self._vecfunc[:sparse],self.A)
@@ -347,7 +369,8 @@ class directBroydenA(NonsquareQuasiNewton):
             sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
             Jr = full_prod[:sparse] - sparse_prod[:sparse]
             pi = Jr - Ar
-            self.A += np.outer(pi, rho_unit)
+            # self.A += np.outer(pi, rho_unit)
+            self.A_part += np.outer(pi[lo_ind:hi_ind], rho_unit)
         return
 
 
@@ -378,6 +401,8 @@ class adjointBroydenA(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         # As = np.dot(self.A,new_s[:slack])
         As = self.dense_matvec(new_s[:slack])
@@ -398,7 +423,8 @@ class adjointBroydenA(NonsquareQuasiNewton):
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
-            self.A += np.outer(sigma_unit,tau)
+            # self.A += np.outer(sigma_unit,tau)
+            self.A_part += np.outer(sigma_unit[lo_ind:hi_ind], tau)
         self.save_mat()
         return
 
@@ -423,6 +449,8 @@ class adjointBroydenB(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         # As = np.dot(self.A, new_s[:slack])
         As = self.dense_matvec(new_s[:slack])
@@ -445,7 +473,8 @@ class adjointBroydenB(NonsquareQuasiNewton):
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
-            self.A += np.outer(sigma_unit,tau)
+            # self.A += np.outer(sigma_unit,tau)
+            self.A_part += np.outer(sigma_unit[lo_ind:hi_ind], tau)
         self.save_mat()
         return
 
@@ -478,6 +507,8 @@ class mixedBroyden(NonsquareQuasiNewton):
         self.x = new_x
         slack = self.slack_index
         sparse = self.sparse_index
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         # Part 1: form adjoint Broyden B update vectors
         # As = np.dot(self.A, new_s[:slack])
@@ -515,7 +546,8 @@ class mixedBroyden(NonsquareQuasiNewton):
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
             tau = JTsigma - ATsigma
-            self.A += np.outer(sigma_unit,tau)
+            # self.A += np.outer(sigma_unit,tau)
+            self.A_part += np.outer(sigma_unit[lo_ind:hi_ind], tau)
 
         if rho2 > self.accept_threshold:
             rho_long = np.zeros(self.n)
@@ -526,9 +558,11 @@ class mixedBroyden(NonsquareQuasiNewton):
             sparse_prod = self.jprod(self.x, rho_long, sparse_only=True)
             Jr = full_prod[:sparse] - sparse_prod[:sparse]
             pi = Jr - Ar
-            self.A += np.outer(pi, rho_unit)
+            # self.A += np.outer(pi, rho_unit)
+            self.A_part += np.outer(pi[lo_ind:hi_ind], rho_unit)
             if sigma2 > self.accept_threshold:
-                self.A -= np.outer(sigma_unit,rho_unit)*np.dot(sigma_unit,pi)
+                # self.A -= np.outer(sigma_unit,rho_unit)*np.dot(sigma_unit,pi)
+                self.A_part -= np.outer(sigma_unit[lo_ind:hi_ind], rho_unit)*np.dot(sigma_unit,pi)
 
         return
 
@@ -560,6 +594,8 @@ class TR1B(NonsquareQuasiNewton):
         slack = self.slack_index
         sparse = self.sparse_index
         self.x = new_x
+        lo_ind = self.inds[self.rank]
+        hi_ind = self.inds[self.rank] + self.sizes[self.rank]
 
         # As = np.dot(self.A,new_s[:slack])
         As = self.dense_matvec(new_s[:slack])
@@ -583,6 +619,7 @@ class TR1B(NonsquareQuasiNewton):
             full_prod = self.jtprod(self.x, sigma_long)
             sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
             JTsigma = full_prod[:slack] - sparse_prod[:slack]
-            self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
+            # self.A += np.outer(Js - As, JTsigma - ATsigma) / denom
+            self.A_part += np.outer(Js[lo_ind:hi_ind] - As[lo_ind:hi_ind], JTsigma - ATsigma) / denom
         return
             
