@@ -116,7 +116,7 @@ class NonsquareQuasiNewton:
 
         if self.hotstart_init:
             # self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
-            self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+self.rank+'.dat')
+            self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat')
             self.hotstart_init = False  # In case another restart is needed later
         else:
             # self.A = np.zeros([self.m_dense,self.n_dense])
@@ -239,7 +239,7 @@ class NonsquareQuasiNewton:
         """
         if self.save_data:
             # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat',self.A)
-            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+self.rank+'.dat',self.A_part)
+            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat',self.A_part)
         return
 
 
