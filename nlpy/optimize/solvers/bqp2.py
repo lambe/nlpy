@@ -460,7 +460,7 @@ class BQP(object):
             iter += 1
 
             #print 'iter:', iter
-            if iter >= maxiter:
+            if iter > maxiter:
                 exitIter = True
                 continue
 
