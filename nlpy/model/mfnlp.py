@@ -139,10 +139,10 @@ class SlackNLP( MFModel ):
         self.hprod = nlp.hprod
         self.hiprod = self.hiprod
 
-        self.equalC = np.array(nlp.equalC) ; self.nequalC = nlp.nequalC
-        self.lowerC = np.array(nlp.lowerC) ; self.nlowerC = nlp.nlowerC
-        self.upperC = np.array(nlp.upperC) ; self.nupperC = nlp.nupperC
-        self.rangeC = np.array(nlp.rangeC) ; self.nrangeC = nlp.nrangeC
+        self.equalC = np.array(nlp.equalC, dtype='int64') ; self.nequalC = nlp.nequalC
+        self.lowerC = np.array(nlp.lowerC, dtype='int64') ; self.nlowerC = nlp.nlowerC
+        self.upperC = np.array(nlp.upperC, dtype='int64') ; self.nupperC = nlp.nupperC
+        self.rangeC = np.array(nlp.rangeC, dtype='int64') ; self.nrangeC = nlp.nrangeC
 
         # Redefine primal and dual initial guesses
         self.original_x0 = nlp.x0[:]
