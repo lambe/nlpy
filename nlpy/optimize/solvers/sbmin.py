@@ -436,8 +436,8 @@ class SBMINFramework(object):
             # feasibility terms
             feas_check = nlp.infeasibility(self.x)
             L_check = self.f - feas_check
-            self.log.debug('     Infeasibility = %9.5e,     Lagrangian = %9.5e',
-                            (feas_check,L_check))
+            self.log.debug('     Infeasibility = %9.5e,     Lagrangian = %9.5e' %
+                            (feas_check, L_check))
 
             exitOptimal = self.pgnorm <= stoptol
             exitIter    = self.iter > self.maxiter
