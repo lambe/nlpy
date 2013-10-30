@@ -85,6 +85,16 @@ class AugmentedLagrangian(NLPModel):
         return algrad
 
 
+    def infeasibility(self, x, **kwargs):
+        """
+        Evaluate only the infeasibility term of the augmented Lagrangian.
+        """
+        cons = self.nlp.cons(x)
+
+        infeas = 0.5*self.rho*np.dot(cons,cons)
+        return infeas
+
+
     def dual_feasibility(self, x, **kwargs):
         """
         Evaluate Lagrangian gradient.

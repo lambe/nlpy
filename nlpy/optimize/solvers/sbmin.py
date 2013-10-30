@@ -432,6 +432,13 @@ class SBMINFramework(object):
                           self.pgnorm, np.linalg.norm(self.true_step), bqpiter, rho,
                           self.radius, self.pstatus))
 
+            # A check on the breakdown of the objective into Lagrangian and 
+            # feasibility terms
+            feas_check = nlp.infeasibility(self.x)
+            L_check = self.f - feas_check
+            self.log.debug('     Infeasibility = %9.5e,     Lagrangian = %9.5e',
+                            (feas_check,L_check))
+
             exitOptimal = self.pgnorm <= stoptol
             exitIter    = self.iter > self.maxiter
             exitTR      = self.TR.Delta <= 10.0 * self.TR.eps
