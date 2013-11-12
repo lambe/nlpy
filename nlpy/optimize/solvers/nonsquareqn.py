@@ -81,8 +81,8 @@ class NonsquareQuasiNewton:
         self.comm = MPI.COMM_WORLD
         size = self.comm.Get_size()
         self.rank = self.comm.Get_rank()
-        mpi_lo = self.rank*self.n_dense/size
-        mpi_hi = (self.rank+1)*self.n_dense/size
+        mpi_lo = self.rank*self.m_dense/size
+        mpi_hi = (self.rank+1)*self.m_dense/size
         mpi_num_rows = mpi_hi - mpi_lo
 
         # The part of the approximate Jacobian stored locally
