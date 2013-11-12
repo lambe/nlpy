@@ -130,11 +130,15 @@ class NonsquareQuasiNewton:
                 #     self.A[k,:] = full_prod[:self.n_dense]
                 lo_ind = self.inds[self.rank]
                 hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-                for k in range(lo_ind, hi_ind):
-                    unitvec[k-1] = 0.
-                    unitvec[k] = 1.
-                    full_prod = self.jtprod(self.x, unitvec)
-                    self.A_part[k-lo_ind,:] = full_prod[:self.n_dense]
+                if lo_ind == hi_ind:
+                    # A dummy product to prevent MPI bugs
+                    dummy = self.jtprod(self.x, unitvec)
+                else:
+                    for k in range(lo_ind, hi_ind):
+                        unitvec[k-1] = 0.
+                        unitvec[k] = 1.
+                        full_prod = self.jtprod(self.x, unitvec)
+                        self.A_part[k-lo_ind,:] = full_prod[:self.n_dense]
             else:
                 unitvec = np.zeros(self.n)
                 lo_ind = self.inds[self.rank]
