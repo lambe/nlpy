@@ -1058,7 +1058,7 @@ class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewto
         This method resets *both* Quasi-Newton approximation.
         """
         self.alprob.hreset()
-        self.alprob.jreset()
+        self.alprob.jreset(self.x)
         return
 
 
