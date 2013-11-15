@@ -1047,52 +1047,61 @@ class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianQuasiNewtonFramew
 
 
 
-# class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
 
-#     def __init__(self, nlp, innerSolver, **kwargs):
-#         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+
+
+    def PostIteration(self, **kwargs):
+        """
+        This method resets *both* Quasi-Newton approximation.
+        """
+        self.alprob.hreset()
+        self.alprob.jreset()
+        return
 
 
 
-class AugmentedLagrangianTotalLbfgsAdjBroyAFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalLbfgsAdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianTotalLbfgsAdjBroyA
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
 
 
 
-class AugmentedLagrangianTotalLbfgsAdjBroyBFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalLbfgsAdjBroyBFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianTotalLbfgsAdjBroyB
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
 
 
 
-class AugmentedLagrangianTotalLsr1AdjBroyAFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalLsr1AdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianTotalLsr1AdjBroyA
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
 
 
 
-class AugmentedLagrangianTotalLsr1AdjBroyBFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalLsr1AdjBroyBFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianTotalLsr1AdjBroyB
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
 
 
 
-class AugmentedLagrangianStructuredLbfgsFramework(AugmentedLagrangianLbfgsFramework):
+class AugmentedLagrangianStructuredLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianStructuredLbfgs
