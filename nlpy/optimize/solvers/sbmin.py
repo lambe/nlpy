@@ -651,13 +651,15 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
         The update only takes place on *successful* iterations.
         """
         SBMINFramework.PostIteration(self, **kwargs)
+        if self.iter % 100 == 0:
+            self.nlp.jreset(self.x)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step
             y = self.lg - self.lg_old
             self.nlp.hupdate(s, y)
-            self.nlp.jupdate(self.x, new_s=s)
+            if self.iter % 100 != 0:
+                self.nlp.jupdate(self.x, new_s=s)
         return
-
 
 
 
