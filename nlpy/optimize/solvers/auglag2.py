@@ -1055,7 +1055,7 @@ class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewto
 
     def PostIteration(self, **kwargs):
         """
-        This method resets *both* Quasi-Newton approximation.
+        This method resets *both* Quasi-Newton approximations on request.
         """
         self.alprob.hreset()
         # self.alprob.jreset(self.x)
