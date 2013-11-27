@@ -664,6 +664,15 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
             elif self.iter % self.jrestart != 0:
                 self.nlp.jupdate(self.x, new_s=s)
             # end if
+        elif self.update_on_rejected_step:
+            s = self.solver.step
+            y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
+            self.nlp.hupdate(s,y)            
+            if self.jrestart <= 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            elif self.iter % self.jrestart != 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            # end if
         return
 
 
