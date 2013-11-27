@@ -647,7 +647,6 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
     def __init__(self, nlp, TR, TrSolver, **kwargs):
         SBMINPartialLqnFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
         self.save_c = True
-        self.jrestart = kwargs.get('jrestart',-1)
 
 
     def PostIteration(self, **kwargs):
@@ -659,10 +658,6 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
         The update only takes place on *successful* iterations.
         """
         SBMINFramework.PostIteration(self, **kwargs)
-        if self.jrestart > 0:
-            if self.iter % self.jrestart == 0:
-                self.nlp.jreset(self.x)
-        # end if
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             # Update the Hessian
             s = self.true_step
@@ -670,19 +665,16 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
             self.nlp.hupdate(s, y)
 
             # Adaptive criterion to restart the Jacobian update
-            p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
-            i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
-            err_change = (p_change - i_change)/p_change
+            # p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
+            # i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
+            p_change = self.nlp.p_infeas_change(self.x, self.c_old, s) # A cheat to reduce costs
+            i_change = self.nlp.i_infeas_change(self.x, self.c_old, s)
+            # err_change = (p_change - i_change)/p_change
+            rho_change = p_change / i_change
 
-            if err_change < -3.:
+            if rho_change < 0.1:
                 self.nlp.jreset(self.x)
-                low_error = False
             else:
-                low_error = True
-
-            if self.jrestart <= 0 and low_error:
-                self.nlp.jupdate(self.x, new_s=s)
-            elif self.iter % self.jrestart != 0 and low_error:
                 self.nlp.jupdate(self.x, new_s=s)
             # end if
 
@@ -693,19 +685,16 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
             self.nlp.hupdate(s, y)
 
             # Adaptive criterion to restart the Jacobian update
-            p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
-            i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
-            err_change = (p_change - i_change)/p_change
+            # p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
+            # i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
+            p_change = self.nlp.p_infeas_change(self.x_old + s, self.c_old, s) # A cheat to reduce costs
+            i_change = self.nlp.i_infeas_change(self.x_old + s, self.c_old, s)            
+            # err_change = (p_change - i_change)/p_change
+            rho_change = p_change / i_change
 
-            if err_change < -3.:
+            if rho_change < 0.1:
                 self.nlp.jreset(self.x)
-                low_error = False
             else:
-                low_error = True
-
-            if self.jrestart <= 0 and low_error:
-                self.nlp.jupdate(self.x, new_s=s)
-            elif self.iter % self.jrestart != 0 and low_error:
                 self.nlp.jupdate(self.x, new_s=s)
             # end if
 
