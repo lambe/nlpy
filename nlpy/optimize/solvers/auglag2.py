@@ -366,6 +366,21 @@ class AugmentedLagrangianTotalQuasiNewton(AugmentedLagrangianPartialQuasiNewton)
         return
 
 
+    def p_infeas_change(self, x, cons, p, **kwargs):
+        nlp = self.nlp
+        J = nlp.jac(x)
+        Jp = J*p
+        Jpc = Jp + cons
+        return 0.5*self.rho*(np.dot(cons,cons) - np.dot(Jpc,Jpc))
+
+
+    def i_infeas_change(self, x, cons, p, **kwargs):
+        A = self.jac(x)
+        Ap = A*p
+        Apc = Ap + cons
+        return 0.5*self.rho*(np.dot(cons,cons) - np.dot(Apc,Apc))
+
+
 
 class AugmentedLagrangianTotalLbfgsAdjBroyA(AugmentedLagrangianTotalQuasiNewton):
     """

@@ -85,9 +85,11 @@ class SBMINFramework(object):
         self.lg_old = kwargs.get('Lg0',None)
         self.ig     = None
         self.ig_old = kwargs.get('Ig0',None)
+        self.c_old  = None
         self.save_g = False              # For methods that need g_{k-1} and g_k
         self.save_lg = False             # Similar to save_g, but for a Lagrangian gradient
         self.save_ig = False             # Save the infeasibility gradient
+        self.save_c = False              # Save the constraint values at the previous point
         self.pgnorm  = None
         self.tsolve = 0.0
         self.true_step = None
@@ -226,6 +228,10 @@ class SBMINFramework(object):
             if self.ig_old is None:
                 self.ig_old = self.nlp.primal_feasibility(self.x)
             self.ig = self.ig_old.copy()
+
+        # Save the constraint values at the previous point
+        if self.save_c:
+            self.c_old = self.nlp.nlp.cons(self.x)
 
         self.f  = self.f0
 
@@ -640,6 +646,7 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
     """
     def __init__(self, nlp, TR, TrSolver, **kwargs):
         SBMINPartialLqnFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
+        self.save_c = True
         self.jrestart = kwargs.get('jrestart',-1)
 
 
@@ -655,15 +662,53 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
         if self.jrestart > 0:
             if self.iter % self.jrestart == 0:
                 self.nlp.jreset(self.x)
+        # end if
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
+            # Update the Hessian
             s = self.true_step
             y = self.lg - self.lg_old
             self.nlp.hupdate(s, y)
-            if self.jrestart <= 0:
+
+            # Adaptive criterion to restart the Jacobian update
+            p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
+            i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
+            err_change = (p_change - i_change)/p_change
+
+            if err_change < -3.:
+                self.nlp.jreset(self.x)
+                low_error = False
+            else:
+                low_error = True
+
+            if self.jrestart <= 0 and low_error:
                 self.nlp.jupdate(self.x, new_s=s)
-            elif self.iter % self.jrestart != 0:
+            elif self.iter % self.jrestart != 0 and low_error:
                 self.nlp.jupdate(self.x, new_s=s)
             # end if
+
+        elif self.update_on_rejected_step:
+            # Update the Hessian
+            s = self.solver.step
+            y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
+            self.nlp.hupdate(s, y)
+
+            # Adaptive criterion to restart the Jacobian update
+            p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
+            i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
+            err_change = (p_change - i_change)/p_change
+
+            if err_change < -3.:
+                self.nlp.jreset(self.x)
+                low_error = False
+            else:
+                low_error = True
+
+            if self.jrestart <= 0 and low_error:
+                self.nlp.jupdate(self.x, new_s=s)
+            elif self.iter % self.jrestart != 0 and low_error:
+                self.nlp.jupdate(self.x, new_s=s)
+            # end if
+
         return
 
 
