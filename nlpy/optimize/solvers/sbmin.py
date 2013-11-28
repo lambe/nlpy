@@ -85,7 +85,7 @@ class SBMINFramework(object):
         self.lg_old = kwargs.get('Lg0',None)
         self.ig     = None
         self.ig_old = kwargs.get('Ig0',None)
-        self.c_old  = None
+        self.c_new  = None
         self.save_g = False              # For methods that need g_{k-1} and g_k
         self.save_lg = False             # Similar to save_g, but for a Lagrangian gradient
         self.save_ig = False             # Save the infeasibility gradient
@@ -228,10 +228,6 @@ class SBMINFramework(object):
             if self.ig_old is None:
                 self.ig_old = self.nlp.primal_feasibility(self.x)
             self.ig = self.ig_old.copy()
-
-        # Save the constraint values at the previous point
-        if self.save_c:
-            self.c_old = self.nlp.nlp.cons(self.x)
 
         self.f  = self.f0
 
@@ -418,6 +414,9 @@ class SBMINFramework(object):
 
             if self.save_ig:
                 self.ig = nlp.primal_feasibility(self.x)
+
+            if self.save_c:
+                self.c_new = self.nlp.nlp.cons(self.x)            
 
             self.true_step = self.x - self.x_old
             self.pstatus = step_status if step_status != 'Acc' else ''
@@ -667,8 +666,10 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
             # Adaptive criterion to restart the Jacobian update
             # p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
             # i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
-            p_change = self.nlp.p_infeas_change(self.x, self.c_old, s) # A cheat to reduce costs
-            i_change = self.nlp.i_infeas_change(self.x, self.c_old, s)
+
+            # Measure the change from the new point for speed
+            p_change = self.nlp.p_infeas_change(self.x, self.c_new, -s)
+            i_change = self.nlp.i_infeas_change(self.x, self.c_new, -s)
             # err_change = (p_change - i_change)/p_change
             rho_change = p_change / i_change
 
@@ -687,8 +688,10 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
             # Adaptive criterion to restart the Jacobian update
             # p_change = self.nlp.p_infeas_change(self.x_old, self.c_old, s)
             # i_change = self.nlp.i_infeas_change(self.x_old, self.c_old, s)
-            p_change = self.nlp.p_infeas_change(self.x_old + s, self.c_old, s) # A cheat to reduce costs
-            i_change = self.nlp.i_infeas_change(self.x_old + s, self.c_old, s)            
+
+            # Measure the change from the new point for speed
+            p_change = self.nlp.p_infeas_change(self.x, self.c_new, s)
+            i_change = self.nlp.i_infeas_change(self.x, self.c_new, s)            
             # err_change = (p_change - i_change)/p_change
             rho_change = p_change / i_change
 

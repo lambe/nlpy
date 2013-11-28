@@ -833,7 +833,8 @@ class AugmentedLagrangianFramework(object):
         m_step_init = self.magical_step(self.x, dphi)
         self.x += m_step_init
 
-        dL = self.alprob.dual_feasibility(self.x)
+        # dL = self.alprob.dual_feasibility(self.x)
+        dL = self.alprob.grad(self.x)
         self.f = self.f0 = self.alprob.nlp.obj(self.x[:original_n])
 
         PdL = self.project_gradient(self.x,dL)
@@ -894,7 +895,8 @@ class AugmentedLagrangianFramework(object):
             self.x = SBMIN.x.copy()
             self.niter_total += SBMIN.iter
 
-            dL = self.alprob.dual_feasibility(self.x)
+            # dL = self.alprob.dual_feasibility(self.x)
+            dL = self.alprob.grad(self.x)
             PdL = self.project_gradient(self.x,dL)
             Pmax_new = np.max(np.abs(PdL))
             convals_new = self.alprob.nlp.cons(self.x)
