@@ -139,10 +139,10 @@ class SlackNLP( MFModel ):
         self.hprod = nlp.hprod
         self.hiprod = self.hiprod
 
-        self.equalC = nlp.equalC ; self.nequalC = nlp.nequalC
-        self.lowerC = nlp.lowerC ; self.nlowerC = nlp.nlowerC
-        self.upperC = nlp.upperC ; self.nupperC = nlp.nupperC
-        self.rangeC = nlp.rangeC ; self.nrangeC = nlp.nrangeC
+        self.equalC = np.array(nlp.equalC, dtype='int64') ; self.nequalC = nlp.nequalC
+        self.lowerC = np.array(nlp.lowerC, dtype='int64') ; self.nlowerC = nlp.nlowerC
+        self.upperC = np.array(nlp.upperC, dtype='int64') ; self.nupperC = nlp.nupperC
+        self.rangeC = np.array(nlp.rangeC, dtype='int64') ; self.nrangeC = nlp.nrangeC
 
         # Redefine primal and dual initial guesses
         self.original_x0 = nlp.x0[:]
@@ -250,10 +250,10 @@ class SlackNLP( MFModel ):
         m = self.m ; om = self.original_m
         nlp = self.nlp
 
-        equalC = nlp.equalC
-        lowerC = nlp.lowerC ; nlowerC = nlp.nlowerC
-        upperC = nlp.upperC ; nupperC = nlp.nupperC
-        rangeC = nlp.rangeC ; nrangeC = nlp.nrangeC
+        equalC = self.equalC
+        lowerC = self.lowerC ; nlowerC = self.nlowerC
+        upperC = self.upperC ; nupperC = self.nupperC
+        rangeC = self.rangeC ; nrangeC = self.nrangeC
 
         mslow = on + self.n_con_low
         msup  = mslow + self.n_con_up
@@ -357,9 +357,9 @@ class SlackNLP( MFModel ):
         n = self.n
         m = self.m
 
-        lowerC = nlp.lowerC ; nlowerC = nlp.nlowerC
-        upperC = nlp.upperC ; nupperC = nlp.nupperC
-        rangeC = nlp.rangeC ; nrangeC = nlp.nrangeC
+        lowerC = self.lowerC ; nlowerC = self.nlowerC
+        upperC = self.upperC ; nupperC = self.nupperC
+        rangeC = self.rangeC ; nrangeC = self.nrangeC
         lowerB = nlp.lowerB ; nlowerB = nlp.nlowerB
         upperB = nlp.upperB ; nupperB = nlp.nupperB
         rangeB = nlp.rangeB ; nrangeB = nlp.nrangeB
@@ -397,9 +397,9 @@ class SlackNLP( MFModel ):
         m = self.m
 
         # List() simply allows operations such as 1 + [2,3] -> [3,4]
-        lowerC = nlp.lowerC ; nlowerC = nlp.nlowerC
-        upperC = nlp.upperC ; nupperC = nlp.nupperC
-        rangeC = nlp.rangeC ; nrangeC = nlp.nrangeC
+        lowerC = self.lowerC ; nlowerC = self.nlowerC
+        upperC = self.upperC ; nupperC = self.nupperC
+        rangeC = self.rangeC ; nrangeC = self.nrangeC
         lowerB = nlp.lowerB ; nlowerB = nlp.nlowerB
         upperB = nlp.upperB ; nupperB = nlp.nupperB
         rangeB = nlp.rangeB ; nrangeB = nlp.nrangeB

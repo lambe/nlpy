@@ -432,6 +432,13 @@ class SBMINFramework(object):
                           self.pgnorm, np.linalg.norm(self.true_step), bqpiter, rho,
                           self.radius, self.pstatus))
 
+            # A check on the breakdown of the objective into Lagrangian and 
+            # feasibility terms
+            feas_check = nlp.infeasibility(self.x)
+            L_check = self.f - feas_check
+            self.log.debug('     Infeasibility = %9.5e,     Lagrangian = %9.5e' %
+                            (feas_check, L_check))
+
             exitOptimal = self.pgnorm <= stoptol
             exitIter    = self.iter > self.maxiter
             exitTR      = self.TR.Delta <= 10.0 * self.TR.eps
@@ -633,6 +640,7 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
     """
     def __init__(self, nlp, TR, TrSolver, **kwargs):
         SBMINPartialLqnFramework.__init__(self, nlp, TR, TrSolver, **kwargs)
+        self.jrestart = kwargs.get('jrestart',-1)
 
 
     def PostIteration(self, **kwargs):
@@ -644,13 +652,28 @@ class SBMINTotalLqnFramework(SBMINPartialLqnFramework):
         The update only takes place on *successful* iterations.
         """
         SBMINFramework.PostIteration(self, **kwargs)
+        if self.jrestart > 0:
+            if self.iter % self.jrestart == 0:
+                self.nlp.jreset(self.x)
         if self.step_status == 'Acc' or self.step_status == 'N-Y Acc':
             s = self.true_step
             y = self.lg - self.lg_old
             self.nlp.hupdate(s, y)
-            self.nlp.jupdate(self.x, new_s=s)
+            if self.jrestart <= 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            elif self.iter % self.jrestart != 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            # end if
+        elif self.update_on_rejected_step:
+            s = self.solver.step
+            y = self.nlp.dual_feasibility(self.x_old + s) - self.lg_old
+            self.nlp.hupdate(s,y)            
+            if self.jrestart <= 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            elif self.iter % self.jrestart != 0:
+                self.nlp.jupdate(self.x, new_s=s)
+            # end if
         return
-
 
 
 
