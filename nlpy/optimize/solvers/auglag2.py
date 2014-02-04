@@ -811,6 +811,7 @@ class AugmentedLagrangianFramework(object):
         #     self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
 
         # First augmented lagrangian gradient evaluation
+        obj = self.alprob.obj(self.x)
         dphi = self.alprob.grad(self.x)
 
         # "Smart" initialization of slack variables using the magical step 
