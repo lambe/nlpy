@@ -1111,15 +1111,6 @@ class AugmentedLagrangianTotalLbfgsAdjBroyBFramework(AugmentedLagrangianTotalQua
 
 
 
-class AugmentedLagrangianTotalBfgsAdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
-
-    def __init__(self, nlp, innerSolver, **kwargs):
-        prob_class = AugmentedLagrangianTotalBfgsAdjBroyA
-        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
-            alprob_class=prob_class, **kwargs)
-
-
-
 class AugmentedLagrangianTotalLsr1AdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
@@ -1140,7 +1131,33 @@ class AugmentedLagrangianTotalLsr1AdjBroyBFramework(AugmentedLagrangianTotalQuas
 
 
 
-class AugmentedLagrangianTotalSr1AdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
+class AugmentedLagrangianTotalQuasiNewtonFrameworkFullMem(AugmentedLagrangianTotalQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+
+
+    def PostIteration(self, **kwargs):
+        """
+        Need to decide whether or not to restart the quasi-Newton 
+        approximations here. (Default for full-memory is no restart.)
+        """
+        # self.alprob.hreset()
+        # self.alprob.jreset(self.x)
+        return
+
+
+
+class AugmentedLagrangianTotalBfgsAdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFrameworkFullMem):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        prob_class = AugmentedLagrangianTotalBfgsAdjBroyA
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+
+
+
+class AugmentedLagrangianTotalSr1AdjBroyAFramework(AugmentedLagrangianTotalQuasiNewtonFrameworkFullMem):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianTotalSr1AdjBroyA
