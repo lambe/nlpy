@@ -46,8 +46,8 @@ class BFGS(object):
         self.sizes = self.comm.allgather(mpi_num_rows)
         self.inds = np.array(self.inds)
         self.sizes = np.array(self.sizes)
-        self.inds_full = self.inds*self.n_dense
-        self.sizes_full = self.sizes*self.n_dense
+        self.inds_full = self.inds*self.n
+        self.sizes_full = self.sizes*self.n
 
         # Initialize the quasi-Newton matrix as an identity matrix
         for i in xrange(mpi_num_rows):
@@ -86,7 +86,7 @@ class BFGS(object):
         """
 
         self.B_part = np.zeros([self.sizes[self.rank], self.n])
-        for i in xrange(mpi_num_rows):
+        for i in xrange(self.sizes[self.rank]):
             self.B_part[i,self.inds[self.rank]+i] = 1.0
         # end for 
         return
@@ -143,7 +143,7 @@ class SR1(BFGS):
         criterion = abs(sTyBs) >= self.accept_threshold * np.linalg.norm(new_s) * np.linalg.norm(yBs)
 
         if criterion:
-            self.B_part += np.outer(yBs[lo_ind,hi_ind],yBs/sTyBs)
+            self.B_part += np.outer(yBs[lo_ind:hi_ind],yBs/sTyBs)
         # end if 
 
         return
