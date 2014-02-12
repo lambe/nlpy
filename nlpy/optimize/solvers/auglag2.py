@@ -1142,7 +1142,7 @@ class AugmentedLagrangianTotalQuasiNewtonFrameworkFullMem(AugmentedLagrangianTot
         Need to decide whether or not to restart the quasi-Newton 
         approximations here. (Default for full-memory is no restart.)
         """
-        # self.alprob.hreset()
+        self.alprob.hreset()
         # self.alprob.jreset(self.x)
         return
 
