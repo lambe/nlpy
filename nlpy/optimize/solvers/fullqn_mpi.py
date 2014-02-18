@@ -142,7 +142,7 @@ class SR1(BFGS):
         sTyBs = np.dot(yBs,new_s)
         criterion = abs(sTyBs) >= self.accept_threshold * np.linalg.norm(new_s) * np.linalg.norm(yBs)
 
-        if criterion:
+        if criterion and abs(sTyBs) >= 1.0e-15:
             self.B_part += np.outer(yBs[lo_ind:hi_ind],yBs/sTyBs)
         # end if 
 
