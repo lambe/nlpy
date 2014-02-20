@@ -416,9 +416,9 @@ class adjointBroydenA(NonsquareQuasiNewton):
 
         sigma = Js - As
         sigma2 = numpy.dot(sigma, sigma)
-        sigma_len = sigma2**0.5
-        sigma_unit = sigma/sigma_len
         if sigma2 > self.accept_threshold:
+            sigma_len = sigma2**0.5
+            sigma_unit = sigma/sigma_len
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma_unit
             # ATsigma = np.dot(sigma_unit, self.A)
@@ -466,9 +466,9 @@ class adjointBroydenB(NonsquareQuasiNewton):
 
         sigma = new_y - As
         sigma2 = numpy.dot(sigma, sigma)
-        sigma_len = sigma2**0.5
-        sigma_unit = sigma/sigma_len
         if sigma2 > self.accept_threshold:
+            sigma_len = sigma2**0.5
+            sigma_unit = sigma/sigma_len
             sigma_long = np.zeros(self.m)
             sigma_long[:sparse] = sigma_unit
             # ATsigma = np.dot(sigma_unit, self.A)

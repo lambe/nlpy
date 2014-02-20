@@ -738,25 +738,25 @@ class AugmentedLagrangianFramework(object):
         tighten feasibility and optimality tolerances
         """
 
-        if self.least_squares_pi:
-            self.least_squares_multipliers(self.x)
-        elif self.damped_pi:
-            # Damped update: minimize the norm of the projected gradient 
-            # of the Lagrangian in the direction of the first-order update.
-            #
-            # Maximum damping parameter of 1 prevents multipliers from having 
-            # incorrect sign
-            r_igrad = self.alprob.rho*self.alprob.primal_feasibility(self.x)
-            dual_feas = self.alprob.dual_feasibility(self.x)
-            on_bound = self.get_active_bounds(self.x)
-            not_on_bound = np.setdiff1d(np.arange(self.alprob.n, dtype=np.int), on_bound)
-            alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
-            self.alprob.pi -= min(max(alpha_opt, 0.), 1.)*self.alprob.rho*convals
-        else:
-            # Basic (first-order) multiplier update
-            self.alprob.pi -= self.alprob.rho*convals
-
         if self.alprob.nlp.m != 0:
+            if self.least_squares_pi:
+                self.least_squares_multipliers(self.x)
+            elif self.damped_pi:
+                # Damped update: minimize the norm of the projected gradient 
+                # of the Lagrangian in the direction of the first-order update.
+                #
+                # Maximum damping parameter of 1 prevents multipliers from having 
+                # incorrect sign
+                r_igrad = self.alprob.rho*self.alprob.primal_feasibility(self.x)
+                dual_feas = self.alprob.dual_feasibility(self.x)
+                on_bound = self.get_active_bounds(self.x)
+                not_on_bound = np.setdiff1d(np.arange(self.alprob.n, dtype=np.int), on_bound)
+                alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
+                self.alprob.pi -= min(max(alpha_opt, 0.), 1.)*self.alprob.rho*convals
+            else:
+                # Basic (first-order) multiplier update
+                self.alprob.pi -= self.alprob.rho*convals
+
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
             if self.save_data:
                 np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
