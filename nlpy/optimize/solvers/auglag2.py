@@ -751,7 +751,10 @@ class AugmentedLagrangianFramework(object):
                 dual_feas = self.alprob.dual_feasibility(self.x)
                 on_bound = self.get_active_bounds(self.x)
                 not_on_bound = np.setdiff1d(np.arange(self.alprob.n, dtype=np.int), on_bound)
-                alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
+                if np.dot(r_igrad[not_on_bound], r_igrad[not_on_bound]) == 0.:
+                    alpha_opt = 0.
+                else:
+                    alpha_opt = -np.dot(r_igrad[not_on_bound], dual_feas[not_on_bound]) / np.dot(r_igrad[not_on_bound],r_igrad[not_on_bound])
                 self.alprob.pi -= min(max(alpha_opt, 0.), 1.)*self.alprob.rho*convals
             else:
                 # Basic (first-order) multiplier update
