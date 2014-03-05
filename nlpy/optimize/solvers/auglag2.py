@@ -589,7 +589,7 @@ class AugmentedLagrangianFramework(object):
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
         self.shelf_fname = self.data_prefix+'auglag_data.shv'
-        self.shelf_handle = shelve.open(self.shelf_fname,'w')
+        self.shelf_handle = shelve.open(self.shelf_fname,'c')
 
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
