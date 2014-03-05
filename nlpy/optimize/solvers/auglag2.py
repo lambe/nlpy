@@ -580,12 +580,12 @@ class AugmentedLagrangianFramework(object):
         constrained solver.
         """
 
-        # For hotstarts, we need to know what type of augmented Lagrangian the 
+        # For warmstarts, we need to know what type of augmented Lagrangian the 
         # problem class is before we start
         self.alprob_class = kwargs.get('alprob_class',AugmentedLagrangian)
 
-        # Options for hotstarting from a previously computed point
-        self.hotstart = kwargs.get('hotstart',False)
+        # Options for warmstarting from a previously computed point
+        self.warmstart = kwargs.get('warmstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
         self.shelf_fname = self.data_prefix+'auglag_data.shv'
@@ -594,7 +594,7 @@ class AugmentedLagrangianFramework(object):
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
 
-        if self.hotstart and self.shelf_handle != None:
+        if self.warmstart and self.shelf_handle != None:
             # rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
             # pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
 
@@ -916,7 +916,7 @@ class AugmentedLagrangianFramework(object):
 
         self.omega = self.omega_init
         self.eta = self.eta_init
-        if self.hotstart:
+        if self.warmstart:
             # self.omega = np.loadtxt(self.data_prefix+'omega'+self.data_suffix+'.dat')
             # self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
 
@@ -965,7 +965,7 @@ class AugmentedLagrangianFramework(object):
                                      abstol=self.omega, x0=self.x,
                                      maxiter=self.max_inner_iter/10., verbose=True,
                                      update_on_rejected_step=self.update_on_rejected_step, 
-                                     hotstart=self.hotstart, shelf_handle=self.shelf_handle, 
+                                     warmstart=self.warmstart, shelf_handle=self.shelf_handle, 
                                      save_data=self.save_data, 
                                      **kwargs)
 

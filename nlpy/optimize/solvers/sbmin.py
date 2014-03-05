@@ -99,8 +99,8 @@ class SBMINFramework(object):
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
 
-        # Options for handling the hotstarting case
-        self.hotstart = kwargs.get('hotstart',False)
+        # Options for handling the warmstarting case
+        self.warmstart = kwargs.get('warmstart',False)
         # self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
         # self.data_suffix = kwargs.get('data_suffix','')
@@ -244,7 +244,7 @@ class SBMINFramework(object):
 
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
-        if self.hotstart:
+        if self.warmstart:
             # self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat')
 
             if self.rank == 0 and shelf_handle != None:

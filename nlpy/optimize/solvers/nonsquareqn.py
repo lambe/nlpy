@@ -70,8 +70,8 @@ class NonsquareQuasiNewton:
         self.numMatVecs = 0
         self.numRMatVecs = 0
 
-        # If a hotstart is used, pull existing data from the specified file
-        self.hotstart_init = kwargs.get('hotstart',False)
+        # If a warmstart is used, pull existing data from the specified file
+        self.warmstart_init = kwargs.get('warmstart',False)
         # self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
         # self.data_suffix = kwargs.get('data_suffix','')
@@ -116,7 +116,7 @@ class NonsquareQuasiNewton:
         """
         self.x = x
 
-        if self.hotstart_init and self.shelf_handle != None:
+        if self.warmstart_init and self.shelf_handle != None:
             # self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
             # self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat')
 
@@ -131,7 +131,7 @@ class NonsquareQuasiNewton:
                 self.A_part = np.empty([self.sizes[self.rank], self.n_dense])
                 self.comm.Recv(self.A_part, source=0, tag=self.rank)
 
-            self.hotstart_init = False  # In case another restart is needed later
+            self.warmstart_init = False  # In case another restart is needed later
         else:
             # self.A = np.zeros([self.m_dense,self.n_dense])
             self.A_part = np.zeros([self.sizes[self.rank], self.n_dense])
