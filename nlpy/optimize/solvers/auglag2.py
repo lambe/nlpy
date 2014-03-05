@@ -589,35 +589,41 @@ class AugmentedLagrangianFramework(object):
         self.data_prefix = kwargs.get('data_prefix','./')
         self.data_suffix = kwargs.get('data_suffix','')
         self.save_data = kwargs.get('save_data',True)
+        self.shelf_fname = self.data_prefix+'auglag'+self.data_suffix+'.shv'
+        self.shelf_handle = shelve.open(self.shelf_fname)
 
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
 
-        if self.hotstart:
+        if self.hotstart and self.shelf_handle != None:
             # rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
             # pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
 
             # Have one processor retrieve the relevant data for the problem
             if self.rank == 0:
-                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
-                rho_start = shelf_handle['rho']
-                pi_start = shelf_handle['pi']
-                shelf_handle.close()
+                # shelf_handle = shelve.open(self.shelf_fname)
+                rho_start = self.shelf_handle['rho']
+                pi_start = self.shelf_handle['pi']
+                self.x = self.shelf_handle['x']
+                # shelf_handle.close()
             else:
                 rho_start = None
                 pi_start = None
+                self.x = None
             # Broadcast the retrieved data
             rho_start = self.comm.bcast(rho_start, root=0)
             pi_start = self.comm.bcast(pi_start, root=0)
+            self.x = self.comm.bcast(self.x, root=0)
 
             # Now start the problem on all processors
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
-                pi0=pi_start,**kwargs)
+                pi0=pi_start, **kwargs)
         else:
             self.alprob = self.alprob_class(nlp,**kwargs)
+            # There should be a nicer way to warm start the x value ...
+            self.x = kwargs.get('x0', self.alprob.x0.copy())
         # end if
 
-        self.x = kwargs.get('x0', self.alprob.x0.copy())
 
         self.least_squares_pi = kwargs.get('least_squares_pi', False)
         self.damped_pi = kwargs.get('damped_pi',True)
@@ -782,11 +788,11 @@ class AugmentedLagrangianFramework(object):
                 self.alprob.pi -= self.alprob.rho*convals
 
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
-            if self.save_data and self.rank == 0:
+            if self.save_data and self.rank == 0 and self.shelf_handle != None:
                 # np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
-                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
-                shelf_handle['pi'] = self.alprob.pi
-                shelf_handle.close()
+                # shelf_handle = shelve.open(self.shelf_fname)
+                self.shelf_handle['pi'] = self.alprob.pi
+                # shelf_handle.close()
 
 
         if status == 'opt':
@@ -807,7 +813,7 @@ class AugmentedLagrangianFramework(object):
             self.inner_fail_count += 1
 
         # Save penalty parameter and convergence tolerances
-        if self.save_data:
+        if self.save_data and self.shelf_handle != None:
             # rho_store = np.array([self.alprob.rho])
             # eta_store = np.array([self.eta])
             # omega_store = np.array([self.omega])
@@ -817,11 +823,11 @@ class AugmentedLagrangianFramework(object):
 
             # Have one processor push the relevant data to the shelf
             if self.rank == 0:
-                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
-                shelf_handle['rho'] = self.alprob.rho
-                shelf_handle['eta'] = self.eta
-                shelf_handle['omega'] = self.omega
-                shelf_handle.close()
+                # shelf_handle = shelve.open(self.shelf_fname)
+                self.shelf_handle['rho'] = self.alprob.rho
+                self.shelf_handle['eta'] = self.eta
+                self.shelf_handle['omega'] = self.omega
+                # shelf_handle.close()
 
         return
 
@@ -852,12 +858,12 @@ class AugmentedLagrangianFramework(object):
             # np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
 
             # Have one processor push the relevant data to the shelf
-            if self.rank == 0:
-                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
-                shelf_handle['rho'] = self.alprob.rho
-                shelf_handle['eta'] = self.eta
-                shelf_handle['omega'] = self.omega
-                shelf_handle.close()
+            if self.rank == 0 and self.shelf_handle != None:
+                # shelf_handle = shelve.open(self.shelf_fname)
+                self.shelf_handle['rho'] = self.alprob.rho
+                self.shelf_handle['eta'] = self.eta
+                self.shelf_handle['omega'] = self.omega
+                # shelf_handle.close()
         return
 
 
@@ -916,11 +922,11 @@ class AugmentedLagrangianFramework(object):
             # self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
 
             # Have one processor retrieve the relevant data for the problem
-            if self.rank == 0:
-                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
-                self.omega = shelf_handle['omega']
-                self.eta = shelf_handle['eta']
-                shelf_handle.close()
+            if self.rank == 0 and self.shelf_handle != None:
+                # shelf_handle = shelve.open(self.shelf_fname)
+                self.omega = self.shelf_handle['omega']
+                self.eta = self.shelf_handle['eta']
+                # shelf_handle.close()
             else:
                 self.omega = None
                 self.eta = None
@@ -960,8 +966,8 @@ class AugmentedLagrangianFramework(object):
                                      abstol=self.omega, x0=self.x,
                                      maxiter=self.max_inner_iter/10., verbose=True,
                                      update_on_rejected_step=self.update_on_rejected_step, 
-                                     hotstart=self.hotstart, data_prefix=self.data_prefix, 
-                                     save_data=self.save_data, data_suffix=self.data_suffix,
+                                     hotstart=self.hotstart, shelf_handle=self.shelf_handle, 
+                                     save_data=self.save_data, 
                                      **kwargs)
 
             SBMIN.Solve()
@@ -1042,6 +1048,8 @@ class AugmentedLagrangianFramework(object):
             exitIter = self.niter_total > self.max_inner_iter
 
         self.tsolve = cputime() - t    # Solve time
+        self.shelf_handle.close()       # Close the data shelf
+
         if self.alprob.nlp.m != 0:
             self.pi_max = np.max(np.abs(self.alprob.pi))
             self.cons_max = np.max(np.abs(self.alprob.nlp.cons(self.x)))

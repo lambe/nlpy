@@ -72,9 +72,11 @@ class NonsquareQuasiNewton:
 
         # If a hotstart is used, pull existing data from the specified file
         self.hotstart_init = kwargs.get('hotstart',False)
-        self.data_prefix = kwargs.get('data_prefix','./')
+        # self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
-        self.data_suffix = kwargs.get('data_suffix','')
+        # self.data_suffix = kwargs.get('data_suffix','')
+        # self.shelf_fname = kwargs.get('shelf_fname',True)
+        self.shelf_handle = kwargs.get('shelf_handle',None)
 
         # MPI data for faster matvecs and rmatvecs
         # Rougly equal partition of all rows
@@ -114,9 +116,21 @@ class NonsquareQuasiNewton:
         """
         self.x = x
 
-        if self.hotstart_init:
+        if self.hotstart_init and self.shelf_handle != None:
             # self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
-            self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat')
+            # self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat')
+
+            # Root processor pulls parts of the Jacobian off the shelf 
+            # and distributes them with point-to-point comm routines
+            if self.rank == 0:
+                self.A_part = self.shelf_handle['J_approx_0']
+                for i in xrange(1,self.comm.Get_size()):
+                    A_block = self.shelf_handle['J_approx_%d'%(i)]
+                    self.comm.Send(A_block, dest=i, tag=i)
+            else:
+                self.A_part = np.empty([self.sizes[self.rank], self.n_dense])
+                self.comm.Recv(self.A_part, source=0, tag=self.rank)
+
             self.hotstart_init = False  # In case another restart is needed later
         else:
             # self.A = np.zeros([self.m_dense,self.n_dense])
@@ -241,9 +255,20 @@ class NonsquareQuasiNewton:
         """
         Save the matrix to a text file in case of premature stop.
         """
-        if self.save_data:
+        if self.save_data and self.shelf_handle != None:
             # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat',self.A)
-            np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat',self.A_part)
+            # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat',self.A_part)
+
+            # Exectute the reverse of the retrieval operation in self.restart()
+            nprocs = self.comm.Get_size()
+            if self.rank == 0:
+                self.shelf_handle['J_approx_0'] = self.A_part
+                for i in xrange(1,nprocs):
+                    A_block = np.empty([self.sizes[i], self.n_dense])
+                    self.comm.Recv(A_block, source=i, tag=nprocs+i)
+                    self.shelf_handle['J_approx_%d'%(i)] = A_block
+            else:
+                self.comm.Send(self.A_part, dest=0, tag=nprocs+i)
         return
 
 
