@@ -587,9 +587,8 @@ class AugmentedLagrangianFramework(object):
         # Options for hotstarting from a previously computed point
         self.hotstart = kwargs.get('hotstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
-        self.data_suffix = kwargs.get('data_suffix','')
         self.save_data = kwargs.get('save_data',True)
-        self.shelf_fname = self.data_prefix+'auglag'+self.data_suffix+'.shv'
+        self.shelf_fname = self.data_prefix+'auglag_data.shv'
         self.shelf_handle = shelve.open(self.shelf_fname,'w')
 
         self.comm = MPI.COMM_WORLD
