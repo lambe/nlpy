@@ -11,6 +11,9 @@ definitions.
 # =============================================================================
 import numpy as np
 import logging
+import shelve
+
+from mpi4py import MPI
 
 # =============================================================================
 # Extension modules
@@ -587,9 +590,27 @@ class AugmentedLagrangianFramework(object):
         self.data_suffix = kwargs.get('data_suffix','')
         self.save_data = kwargs.get('save_data',True)
 
+        self.comm = MPI.COMM_WORLD
+        self.rank = self.comm.Get_rank()
+
         if self.hotstart:
-            rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
-            pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
+            # rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
+            # pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
+
+            # Have one processor retrieve the relevant data for the problem
+            if self.rank == 0:
+                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
+                rho_start = shelf_handle['rho']
+                pi_start = shelf_handle['pi']
+                shelf_handle.close()
+            else:
+                rho_start = None
+                pi_start = None
+            # Broadcast the retrieved data
+            rho_start = self.comm.bcast(rho_start, root=0)
+            pi_start = self.comm.bcast(pi_start, root=0)
+
+            # Now start the problem on all processors
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
                 pi0=pi_start,**kwargs)
         else:
@@ -761,8 +782,12 @@ class AugmentedLagrangianFramework(object):
                 self.alprob.pi -= self.alprob.rho*convals
 
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
-            if self.save_data:
-                np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
+            if self.save_data and self.rank == 0:
+                # np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
+                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
+                shelf_handle['pi'] = self.alprob.pi
+                shelf_handle.close()
+
 
         if status == 'opt':
             # Safeguard: tighten tolerances only if desired optimality
@@ -783,12 +808,21 @@ class AugmentedLagrangianFramework(object):
 
         # Save penalty parameter and convergence tolerances
         if self.save_data:
-            rho_store = np.array([self.alprob.rho])
-            eta_store = np.array([self.eta])
-            omega_store = np.array([self.omega])
-            np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
-            np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
-            np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
+            # rho_store = np.array([self.alprob.rho])
+            # eta_store = np.array([self.eta])
+            # omega_store = np.array([self.omega])
+            # np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
+            # np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
+            # np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
+
+            # Have one processor push the relevant data to the shelf
+            if self.rank == 0:
+                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
+                shelf_handle['rho'] = self.alprob.rho
+                shelf_handle['eta'] = self.eta
+                shelf_handle['omega'] = self.omega
+                shelf_handle.close()
+
         return
 
 
@@ -810,12 +844,20 @@ class AugmentedLagrangianFramework(object):
 
         # Save data in case of crash
         if self.save_data:
-            rho_store = np.array([self.alprob.rho])
-            eta_store = np.array([self.eta])
-            omega_store = np.array([self.omega])
-            np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
-            np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
-            np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
+            # rho_store = np.array([self.alprob.rho])
+            # eta_store = np.array([self.eta])
+            # omega_store = np.array([self.omega])
+            # np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
+            # np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
+            # np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
+
+            # Have one processor push the relevant data to the shelf
+            if self.rank == 0:
+                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
+                shelf_handle['rho'] = self.alprob.rho
+                shelf_handle['eta'] = self.eta
+                shelf_handle['omega'] = self.omega
+                shelf_handle.close()
         return
 
 
@@ -870,8 +912,22 @@ class AugmentedLagrangianFramework(object):
         self.omega = self.omega_init
         self.eta = self.eta_init
         if self.hotstart:
-            self.omega = np.loadtxt(self.data_prefix+'omega'+self.data_suffix+'.dat')
-            self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
+            # self.omega = np.loadtxt(self.data_prefix+'omega'+self.data_suffix+'.dat')
+            # self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
+
+            # Have one processor retrieve the relevant data for the problem
+            if self.rank == 0:
+                shelf_handle = shelve.open(self.data_prefix+'auglag'+self.data_suffix+'.shv')
+                self.omega = shelf_handle['omega']
+                self.eta = shelf_handle['eta']
+                shelf_handle.close()
+            else:
+                self.omega = None
+                self.eta = None
+            # Broadcast the retrieved data
+            self.omega = self.comm.bcast(self.omega, root=0)
+            self.eta = self.comm.bcast(self.eta, root=0)
+
         self.omega_opt = self.omega_rel * self.pg0 + self.omega_abs
         self.eta_opt = self.eta_rel * max_cons + self.eta_abs
 

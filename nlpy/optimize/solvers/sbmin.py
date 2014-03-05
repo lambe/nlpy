@@ -11,8 +11,11 @@ from nlpy.tools.exceptions import UserExitRequest
 from nlpy.tools.utils import NullHandler
 import numpy as np
 import logging
+import shelve
 from math import sqrt
 from nlpy.model import NLPModel
+
+from mpi4py import MPI
 
 __docformat__ = 'restructuredtext'
 
@@ -92,6 +95,9 @@ class SBMINFramework(object):
         self.tsolve = 0.0
         self.true_step = None
         self.update_on_rejected_step = kwargs.get('update_on_rejected_step', False)
+
+        self.comm = MPI.COMM_WORLD
+        self.rank = self.comm.Get_rank()
 
         # Options for handling the hotstarting case
         self.hotstart = kwargs.get('hotstart',False)
@@ -190,10 +196,15 @@ class SBMINFramework(object):
         Override this method to perform work at the end of an iteration. For
         example, use this method for updating a LBFGS Hessian
         """
-        if self.save_data:
-            np.savetxt(self.data_prefix+'x'+self.data_suffix+'.dat',self.x)
-            delta_store = np.array([self.TR.Delta])
-            np.savetxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat',delta_store)
+        if self.save_data and self.rank == 0:
+            # np.savetxt(self.data_prefix+'x'+self.data_suffix+'.dat',self.x)
+            # delta_store = np.array([self.TR.Delta])
+            # np.savetxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat',delta_store)
+
+            shelf_handle = shelve.open(self.data_prefix+'sbmin'+self.data_suffix+'.shv')
+            shelf_handle['x'] = self.x
+            shelf_handle['tr_Delta'] = self.TR.Delta
+            shelf_handle.close()
         return None
 
 
@@ -232,7 +243,16 @@ class SBMINFramework(object):
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
         if self.hotstart:
-            self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat')
+            # self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat')
+
+            if self.rank == 0:
+                shelf_handle = shelve.open(self.data_prefix+'sbmin'+self.data_suffix+'.shv')
+                self.TR.Delta = shelf_handle['tr_Delta']
+                shelf_handle.close()
+            else:
+                self.TR.Delta = None
+            self.TR.Delta = self.comm.bcast(self.TR.Delta, root=0)
+            
         self.radii = [self.TR.Delta]
 
         # Initialize non-monotonicity parameters.
