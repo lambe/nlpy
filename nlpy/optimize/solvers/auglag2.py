@@ -589,7 +589,7 @@ class AugmentedLagrangianFramework(object):
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
         self.shelf_fname = self.data_prefix+'auglag_data.shv'
-        self.shelf_handle = shelve.open(self.shelf_fname,'c')
+        self.shelf_handle = shelve.open(self.shelf_fname,'c',writeback=True)
 
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
@@ -791,6 +791,7 @@ class AugmentedLagrangianFramework(object):
                 # np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
                 # shelf_handle = shelve.open(self.shelf_fname)
                 self.shelf_handle['pi'] = self.alprob.pi
+                self.shelf_handle.sync()
                 # shelf_handle.close()
 
 
@@ -826,6 +827,7 @@ class AugmentedLagrangianFramework(object):
                 self.shelf_handle['rho'] = self.alprob.rho
                 self.shelf_handle['eta'] = self.eta
                 self.shelf_handle['omega'] = self.omega
+                self.shelf_handle.sync()
                 # shelf_handle.close()
 
         return
@@ -862,6 +864,7 @@ class AugmentedLagrangianFramework(object):
                 self.shelf_handle['rho'] = self.alprob.rho
                 self.shelf_handle['eta'] = self.eta
                 self.shelf_handle['omega'] = self.omega
+                self.shelf_handle.sync()
                 # shelf_handle.close()
         return
 

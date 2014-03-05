@@ -206,6 +206,7 @@ class SBMINFramework(object):
             # shelf_handle = shelve.open(self.shelf_fname)
             self.shelf_handle['x'] = self.x
             self.shelf_handle['tr_Delta'] = self.TR.Delta
+            self.shelf_handle.sync()
             # shelf_handle.close()
         return None
 

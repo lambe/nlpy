@@ -267,6 +267,7 @@ class NonsquareQuasiNewton:
                     A_block = np.empty([self.sizes[i], self.n_dense])
                     self.comm.Recv(A_block, source=i, tag=nprocs+i)
                     self.shelf_handle['J_approx_%d'%(i)] = A_block
+                    self.shelf_handle.sync()
             else:
                 self.comm.Send(self.A_part, dest=0, tag=nprocs+i)
         return
