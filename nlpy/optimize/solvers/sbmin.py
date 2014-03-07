@@ -101,10 +101,7 @@ class SBMINFramework(object):
 
         # Options for handling the warmstarting case
         self.warmstart = kwargs.get('warmstart',False)
-        # self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
-        # self.data_suffix = kwargs.get('data_suffix','')
-        # self.shelf_fname = kwargs.get('shelf_fname','./sbmin.shv')
         self.shelf_handle = kwargs.get('shelf_handle',None)
 
         # Options for Nocedal-Yuan backtracking
@@ -199,15 +196,9 @@ class SBMINFramework(object):
         example, use this method for updating a LBFGS Hessian
         """
         if self.save_data and self.rank == 0 and self.shelf_handle != None:
-            # np.savetxt(self.data_prefix+'x'+self.data_suffix+'.dat',self.x)
-            # delta_store = np.array([self.TR.Delta])
-            # np.savetxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat',delta_store)
-
-            # shelf_handle = shelve.open(self.shelf_fname)
             self.shelf_handle['x'] = self.x
             self.shelf_handle['tr_Delta'] = self.TR.Delta
             self.shelf_handle.sync()
-            # shelf_handle.close()
         return None
 
 
@@ -246,12 +237,8 @@ class SBMINFramework(object):
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
         if self.warmstart:
-            # self.TR.Delta = np.loadtxt(self.data_prefix+'tr_Delta'+self.data_suffix+'.dat')
-
             if self.rank == 0 and shelf_handle != None:
-                # shelf_handle = shelve.open(self.shelf_fname)
                 self.TR.Delta = self.shelf_handle['tr_Delta']
-                # shelf_handle.close()
             else:
                 self.TR.Delta = None
             self.TR.Delta = self.comm.bcast(self.TR.Delta, root=0)

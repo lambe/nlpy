@@ -72,10 +72,7 @@ class NonsquareQuasiNewton:
 
         # If a warmstart is used, pull existing data from the specified file
         self.warmstart_init = kwargs.get('warmstart',False)
-        # self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
-        # self.data_suffix = kwargs.get('data_suffix','')
-        # self.shelf_fname = kwargs.get('shelf_fname',True)
         self.shelf_handle = kwargs.get('shelf_handle',None)
 
         # MPI data for faster matvecs and rmatvecs
@@ -117,9 +114,6 @@ class NonsquareQuasiNewton:
         self.x = x
 
         if self.warmstart_init and self.shelf_handle != None:
-            # self.A = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat')
-            # self.A_part = np.loadtxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat')
-
             # Root processor pulls parts of the Jacobian off the shelf 
             # and distributes them with point-to-point comm routines
             if self.rank == 0:
@@ -256,9 +250,6 @@ class NonsquareQuasiNewton:
         Save the matrix to a text file in case of premature stop.
         """
         if self.save_data and self.shelf_handle != None:
-            # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'.dat',self.A)
-            # np.savetxt(self.data_prefix+'approxJ'+self.data_suffix+'_'+str(self.rank)+'.dat',self.A_part)
-
             # Exectute the reverse of the retrieval operation in self.restart()
             nprocs = self.comm.Get_size()
             if self.rank == 0:

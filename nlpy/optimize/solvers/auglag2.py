@@ -595,16 +595,11 @@ class AugmentedLagrangianFramework(object):
         self.rank = self.comm.Get_rank()
 
         if self.warmstart and self.shelf_handle != None:
-            # rho_start = np.loadtxt(self.data_prefix+'rho'+self.data_suffix+'.dat')
-            # pi_start = np.loadtxt(self.data_prefix+'pi'+self.data_suffix+'.dat')
-
             # Have one processor retrieve the relevant data for the problem
             if self.rank == 0:
-                # shelf_handle = shelve.open(self.shelf_fname)
                 rho_start = self.shelf_handle['rho']
                 pi_start = self.shelf_handle['pi']
                 self.x = self.shelf_handle['x']
-                # shelf_handle.close()
             else:
                 rho_start = None
                 pi_start = None
@@ -619,7 +614,6 @@ class AugmentedLagrangianFramework(object):
                 pi0=pi_start, **kwargs)
         else:
             self.alprob = self.alprob_class(nlp,**kwargs)
-            # There should be a nicer way to warm start the x value ...
             self.x = kwargs.get('x0', self.alprob.x0.copy())
         # end if
 
@@ -788,11 +782,8 @@ class AugmentedLagrangianFramework(object):
 
             self.log.debug('New multipliers = %g, %g' % (max(self.alprob.pi),min(self.alprob.pi)))
             if self.save_data and self.rank == 0 and self.shelf_handle != None:
-                # np.savetxt(self.data_prefix+'pi'+self.data_suffix+'.dat', self.alprob.pi)
-                # shelf_handle = shelve.open(self.shelf_fname)
                 self.shelf_handle['pi'] = self.alprob.pi
                 self.shelf_handle.sync()
-                # shelf_handle.close()
 
 
         if status == 'opt':
@@ -814,21 +805,12 @@ class AugmentedLagrangianFramework(object):
 
         # Save penalty parameter and convergence tolerances
         if self.save_data and self.shelf_handle != None:
-            # rho_store = np.array([self.alprob.rho])
-            # eta_store = np.array([self.eta])
-            # omega_store = np.array([self.omega])
-            # np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
-            # np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
-            # np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
-
             # Have one processor push the relevant data to the shelf
             if self.rank == 0:
-                # shelf_handle = shelve.open(self.shelf_fname)
                 self.shelf_handle['rho'] = self.alprob.rho
                 self.shelf_handle['eta'] = self.eta
                 self.shelf_handle['omega'] = self.omega
                 self.shelf_handle.sync()
-                # shelf_handle.close()
 
         return
 
@@ -851,21 +833,12 @@ class AugmentedLagrangianFramework(object):
 
         # Save data in case of crash
         if self.save_data:
-            # rho_store = np.array([self.alprob.rho])
-            # eta_store = np.array([self.eta])
-            # omega_store = np.array([self.omega])
-            # np.savetxt(self.data_prefix+'rho'+self.data_suffix+'.dat',rho_store)
-            # np.savetxt(self.data_prefix+'eta'+self.data_suffix+'.dat',eta_store)
-            # np.savetxt(self.data_prefix+'omega'+self.data_suffix+'.dat',omega_store)
-
             # Have one processor push the relevant data to the shelf
             if self.rank == 0 and self.shelf_handle != None:
-                # shelf_handle = shelve.open(self.shelf_fname)
                 self.shelf_handle['rho'] = self.alprob.rho
                 self.shelf_handle['eta'] = self.eta
                 self.shelf_handle['omega'] = self.omega
                 self.shelf_handle.sync()
-                # shelf_handle.close()
         return
 
 
@@ -920,15 +893,10 @@ class AugmentedLagrangianFramework(object):
         self.omega = self.omega_init
         self.eta = self.eta_init
         if self.warmstart:
-            # self.omega = np.loadtxt(self.data_prefix+'omega'+self.data_suffix+'.dat')
-            # self.eta = np.loadtxt(self.data_prefix+'eta'+self.data_suffix+'.dat')
-
             # Have one processor retrieve the relevant data for the problem
             if self.rank == 0 and self.shelf_handle != None:
-                # shelf_handle = shelve.open(self.shelf_fname)
                 self.omega = self.shelf_handle['omega']
                 self.eta = self.shelf_handle['eta']
-                # shelf_handle.close()
             else:
                 self.omega = None
                 self.eta = None
