@@ -20,7 +20,10 @@ Last update: March 2014
 """
 
 import numpy as np 
+import copy
+from numpy.linalg import norm
 from nlpy.model import NLPModel
+eps = np.finfo(1.0).eps
 
 class NLPModel_mini(NLPModel):
 	"""
@@ -63,7 +66,7 @@ class NLPModel_mini(NLPModel):
         self.name = name         # Problem name
 
         # Initialize local value for Infinity
-        self.Infinity = 1e+20
+        self.Infinity = np.infty
         self.negInfinity = - self.Infinity
         self.zero = 0.0
         self.one = 1.0
@@ -152,6 +155,17 @@ class NLPModel_mini(NLPModel):
         	if ktotal != self.m:
         		raise ValueError('Constraint bounds badly ordered or free constraints present')
 
+        # Same index values as defined above, shorthand
+        self.neC = self.nequalC
+        self.nlC = self.nlowerC
+        self.nrC = self.nrangeC
+        self.nuC = self.nupperC
+
+        self.eCs = self.equalC_start
+        self.lCs = self.lowerC_start
+        self.rCs = self.rangeC_start
+        self.uCs = self.upperC_start
+
         # Initialize some counters
         self.feval = 0    # evaluations of objective  function
         self.geval = 0    #                           gradient
@@ -164,4 +178,275 @@ class NLPModel_mini(NLPModel):
 
 
 
-# New matrix-free class and SlackNLP class go here
+class MFModel_mini(NLPModel_mini):
+
+    """
+    MFModel is a derived type of NLPModel which focuses on matrix-free
+    implementations of the standard NLP.
+
+    Most of the functionality is the same as NLPModel except for additional
+    methods and counters for Jacobian-free cases.
+
+    Note: these parts could be reintegrated into NLPModel at a later date.
+    """
+
+    def __init__(self, n=0, m=0, name='Generic Matrix-Free', **kwargs):
+
+        # Standard NLP initialization
+        NLPModel.__init__(self,n=n,m=m,name=name,**kwargs)
+
+
+    def jac(self, x, **kwargs):
+        return SimpleLinearOperator(self.n, self.m, symmetric=False,
+                         matvec=lambda u: self.jprod(x,u,**kwargs),
+                         matvec_transp=lambda u: self.jtprod(x,u,**kwargs))
+
+
+    def hess(self, x, z=None, **kwargs):
+        return SimpleLinearOperator(self.n, self.n, symmetric=True,
+                         matvec=lambda u: self.hprod(x,z,u,**kwargs))
+# end class
+
+
+
+# Is class inheritance necessary? Or do we just need something with 
+# appropriate function names?
+class SlackNLP_mini( MFModel_mini ):
+    """
+    General framework for converting a nonlinear optimization problem to a
+    form using slack variables. Inequality constraints are transformed to 
+    equalities with slack variables. The slack variables are then added 
+    to the variable set and treated as bounded variables.
+
+    The order of variables in the transformed problem is as follows:
+
+    1. x, the original problem variables.
+
+    2. sL = [ sLL | sLR ], sLL being the slack variables corresponding to
+       general constraints with a lower bound only, and sLR being the slack
+       variables corresponding to the 'lower' side of range constraints.
+
+    3. sU = [ sUU | sUR ], sUU being the slack variables corresponding to
+       general constraints with an upper bound only, and sUR being the slack
+       variables corresponding to the 'upper' side of range constraints.
+
+    This framework initializes the slack variables sL and sU to zero by 
+    default.
+    """
+
+    def __init__(self, nlp, **kwargs):
+
+        self.nlp = nlp
+
+        # Save number of variables and constraints prior to transformation
+        self.original_n = nlp.n
+        self.original_m = nlp.m
+        self.on = self.original_n
+        self.om = self.original_m
+
+        # Number of slacks for inequality constraints with a lower bound
+        self.n_con_low = nlp.nlowerC + nlp.nrangeC
+
+        # Number of slacks for inequality constraints with an upper bound
+        self.n_con_up = nlp.nupperC + nlp.nrangeC
+
+        # Update effective number of variables and constraints
+        n = self.original_n + n_con_low + n_con_up
+        m = self.original_m + nlp.nrangeC
+
+        Lvar = np.zeros(n)
+        Lvar[:self.original_n] = nlp.Lvar
+        Uvar = +np.infty * np.ones(n)
+        Uvar[:self.original_n] = nlp.Uvar
+
+        Lcon = Ucon = np.zeros(m)
+
+        MFModel.__init__(self, n=n, m=m, name='Slack NLP', Lvar=Lvar, \
+                          Uvar=Uvar, Lcon=Lcon, Ucon=Ucon)
+
+        self.hprod = nlp.hprod
+        self.hiprod = nlp.hiprod
+
+        # Redefine primal and dual initial guesses
+        self.original_x0 = nlp.x0[:]
+        self.x0 = np.zeros(self.n)
+        self.x0[:self.original_n] = self.original_x0[:]
+
+        self.original_pi0 = nlp.pi0[:]
+        self.pi0 = np.zeros(self.m)
+        self.pi0[:self.original_m] = self.original_pi0[:]
+
+        # Saved values (private) 
+        # No more hashing objects to check x: 
+        # Numpy norm calculation is much faster for long arrays
+        self._cache = {'x':np.infty * np.ones(self.original_n,'d'),
+            'obj':None, 'cons':None, 'grad':None}
+
+        return
+
+
+    def InitializeSlacks(self, val=0.0, **kwargs):
+        """
+        Initialize all slack variables to given value. This method may need to
+        be overridden.
+        """
+        self.x0[self.original_n:] = val
+        return
+
+
+    def obj(self, x):
+        """
+        Return the value of the objective function at `x`. This function is
+        specialized since the original objective function only depends on a
+        subvector of `x`.
+        """
+
+        same_x = norm(x[:self.original_n] - self._cache['x']) < eps
+
+        if self._last_obj is not None and same_x:
+            f = self._cache['obj']
+        elif self._last_obj is None and same_x:
+            f = self.nlp.obj(self._cache['x'])
+            self._cache['obj'] = copy.deepcopy(f)
+        else:
+            f = self.nlp.obj(x[:self.original_n])
+            self._cache['x'] = x[:self.original_n].copy()
+            self._cache['obj'] = copy.deepcopy(f)
+            self._cache['cons'] = None
+            self._cache['grad'] = None
+
+        return f
+
+
+    def grad(self, x):
+        """
+        Return the value of the gradient of the objective function at `x`.
+        This function is specialized since the original objective function only
+        depends on a subvector of `x`.
+        """
+        g = np.zeros(self.n)
+        same_x = norm(x[:self.original_n] - self._cache['x']) < eps
+
+        if self._cache['grad'] is not None and same_x:
+            g[:self.original_n] = self._cache['grad']
+        elif self._cache['grad'] is None and same_x:
+            g[:self.original_n] = self.nlp.grad(self._cache['x'])
+            self._cache['grad'] = copy.deepcopy(g[:self.original_n])
+        else:
+            g[:self.original_n] = self.nlp.grad(x[:self.original_n])
+            self._cache['x'] = x[:self.original_n].copy()
+            self._cache['obj'] = None
+            self._cache['cons'] = None
+            self._cache['grad'] = copy.deepcopy(g[:self.original_n])
+
+        return g
+
+
+    def cons(self, x):
+        """
+        Evaluate the vector of general constraints for the modified problem.
+        Constraints are stored in the order in which they appear in the
+        original problem. If constraint i is a range constraint, c[i] will
+        be the constraint that has the slack on the lower bound on c[i].
+        The constraint with the slack on the upper bound on c[i] will be stored
+        in position m + k, where k is the position of index i in
+        rangeC, i.e., k=0 iff constraint i is the range constraint that
+        appears first, k=1 iff it appears second, etc.
+
+        Constraints appear in the following order:
+
+        1. [ c  ]   general constraints in original order
+        2. [ cR ]   'upper' side of range constraints
+        """
+        mslow = self.original_n + self.n_con_low
+        msup  = mslow + self.n_con_up
+        s_low = x[on:mslow]    # len(s_low) = n_con_low
+        s_up  = x[mslow:msup]  # len(s_up)  = n_con_up
+
+        c = np.empty(self.m)
+        same_x = norm(x[:self.original_n] - self._cache['x']) < eps
+
+        if self._cache['cons'] is not None and same_x:
+            c[:self.original_m] = self._cache['cons']
+        elif self._cache['cons'] is None and same_x:
+            c[:self.original_m] = self.nlp.cons(self._cache['x'])
+            self._cache['cons'] = copy.deepcopy(c[:self.original_m])
+        else:
+            c[:self.original_m] = self.nlp.cons(x[:self.original_n])
+            self._cache['x'] = x[:self.original_n]
+            self._cache['obj'] = None
+            self._cache['cons'] = copy.deepcopy(c[:self.original_m])
+            self._cache['grad'] = None
+
+        # Copy range constraint evaluation
+        c[self.om:] = c[self.nlp.rCs:self.nlp.uCs]
+
+        # Equality constraints
+        c[self.nlp.eCs:self.nlp.lCs] -= self.nlp.Lcon[self.nlp.eCs:self.nlp.lCs]
+
+        # Lower bounded constraints
+        c[self.nlp.lCs:self.nlp.rCs] -= self.nlp.Lcon[self.nlp.lCs:self.nlp.rCs] 
+        c[self.nlp.lCs:self.nlp.rCs] -= s_low[:self.nlp.nlC]
+
+        # Lower bound of range constraints
+        c[self.nlp.rCs:self.nlp.uCs] -= self.nlp.Lcon[self.nlp.rCs:self.nlp.uCs] 
+        c[self.nlp.rCs:self.nlp.uCs] -= s_low[self.nlp.nlC:]
+
+        # Upper bounded constraints
+        c[self.nlp.uCs:self.om] -= self.nlp.Ucon[self.nlp.uCs:self.om] 
+        c[self.nlp.uCs:self.om] *= -1.
+        c[self.nlp.uCs:self.om] -= s_up[:self.nlp.nuC]
+
+        # Upper bound of range constraints
+        c[self.om:] -= self.nlp.Ucon[self.nlp.rCs:self.nlp.uCs]
+        c[self.om:] *= -1
+        c[self.om:] -= s_up[self.nlp.nuC:]
+
+        return c
+
+
+    def jprod(self, x, v, **kwargs):
+
+        p = np.zeros(m)
+
+        # Perform jprod and account for upper bounded constraints
+        p[:self.om] = nlp.jprod(x[:self.on], v[:self.on], **kwargs)
+        p[self.nlp.uCs:self.om] *= -1.0
+        p[self.om:] = p[self.nlp.rCs:self.nlp.uCs]
+        p[self.om:] *= -1.0
+
+        # Insert contribution of slacks on general constraints
+        bot = self.on           # Lower bound
+        p[self.nlp.lCs:self.nlp.rCs] -= v[bot:bot+self.nlp.nlC]
+        bot += self.nlp.nlC     # Lower range
+        p[self.nlp.rCs:self.nlp.uCs] -= v[bot:bot+self.nlp.nrC]
+        bot += self.nlp.nrC     # Upper bound
+        p[self.nlp.uCs:self.om] -= v[bot:bot+self.nlp.nuC]
+        bot += self.nlp.nuC     # Upper range
+        p[self.om:] -= v[bot:bot+self.nlp.nrC]
+
+        return p
+
+
+    def jtprod(self, x, v, **kwargs):
+
+        p = np.zeros(n)
+        vmp = v[:self.om].copy()
+        vmp[self.nlp.uCs:self.om] *= -1.0
+        vmp[self.nlp.rCs:self.nlp.uCs] -= v[self.om:]
+
+        p[:self.on] = nlp.jtprod(x[:self.on], vmp, **kwargs)
+
+        # Insert contribution of slacks on general constraints
+        bot = self.on           # Lower bound
+        p[bot:bot+self.nlp.nlC] = -v[self.nlp.lCs:self.nlp.rCs]
+        bot += self.nlp.nlC     # Lower range
+        p[bot:bot+self.nlp.nrC] = -v[self.nlp.rCs:self.nlp.uCs]
+        bot += self.nlp.nrC     # Upper bound
+        p[bot:bot+self.nlp.nuC]  = -v[self.nlp.uCs:self.om]
+        bot += nupperC          # Upper range
+        p[bot:bot+self.nlp.nrC]  = -v[self.om:]
+
+        return p
+
+
