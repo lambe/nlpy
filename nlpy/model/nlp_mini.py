@@ -23,16 +23,19 @@ import numpy as np
 import copy
 from numpy.linalg import norm
 from nlpy.model import NLPModel
+from nlpy.krylov import SimpleLinearOperator
 eps = np.finfo(1.0).eps
 
-class NLPModel_mini(NLPModel):
-	"""
-	A derived NLPModel class with a simplified constraint definition. Only 
-	nonlinear constraints are assumed to be present in this formulation.
+import pdb
 
-	We assume the constraint order is equalities, lower-bounded inequalities, 
-	range inequalities, and upper-bounded inequalities. Bad things will happen 
-	if this order is violated.
+class NLPModel_mini(NLPModel):
+    """
+    A derived NLPModel class with a simplified constraint definition. Only 
+    nonlinear constraints are assumed to be present in this formulation.
+
+    We assume the constraint order is equalities, lower-bounded inequalities, 
+    range inequalities, and upper-bounded inequalities. Bad things will happen 
+    if this order is violated.
 
     :parameters:
 
@@ -45,8 +48,8 @@ class NLPModel_mini(NLPModel):
         :x0:      initial point (default: all 0)
         :pi0:     vector of initial multipliers (default: all 0)
         :m_list:  vector of length 4 defining the number of constraints 
-        		  in each group (automatic detection enabled if this is 
-        		  not given)
+                  in each group (automatic detection enabled if this is 
+                  not given)
         :Lvar:    vector of lower bounds on the variables
                   (default: all -Infinity)
         :Uvar:    vector of upper bounds on the variables
@@ -56,9 +59,9 @@ class NLPModel_mini(NLPModel):
         :Ucon:    vector of upper bounds on the constraints
                   (default: all +Infinity)
 
-	"""
+    """
 
-	# Just need to write the class constructor
+    # Just need to write the class constructor
     def __init__(self, n=0, m=0, name='Generic', **kwargs):
 
         self.nvar = self.n = n   # Number of variables
@@ -109,51 +112,76 @@ class NLPModel_mini(NLPModel):
 
         # Count the number of constraints of each type
         if 'm_list' in kwargs.keys():
-        	# User-provided values
-        	m_list = np.ascontiguousarray(kwargs['m_list'], dtype=int)
-        	self.nequalC = m_list[0]
-        	self.nlowerC = m_list[1]
-        	self.nrangeC = m_list[2]
-        	self.nupperC = m_list[3]
+            # User-provided values
+            m_list = np.ascontiguousarray(kwargs['m_list'], dtype=int)
+            self.nequalC = m_list[0]
+            self.nlowerC = m_list[1]
+            self.nrangeC = m_list[2]
+            self.nupperC = m_list[3]
 
-        	self.equalC_start = 0
-        	self.lowerC_start = m_list[0]
-        	self.rangeC_start = m_list[0] + m_list[1]
-        	self.upperC_start = m_list[0] + m_list[1] + m_list[2]
+            self.equalC_start = 0
+            self.lowerC_start = m_list[0]
+            self.rangeC_start = m_list[0] + m_list[1]
+            self.upperC_start = m_list[0] + m_list[1] + m_list[2]
 
-        	# Sanity check of constraint bounds (to be implemented)
-        	if self.m != m_list.sum():
-        		raise ValueError('Number of constraints does not match provided list')
+            # Sanity check of constraint bounds (to be implemented)
+            if self.m != m_list.sum():
+                raise ValueError('Number of constraints does not match provided list')
+
+        elif m > 0:
+            # Auto detection of number of constraints in each class
+            # ** how to stop k at m? **
+            # k = 0
+
+            self.nequalC = 0
+            self.nlowerC = 0
+            self.nrangeC = 0
+            self.nupperC = 0
+
+            self.equalC_start = 0
+            self.lowerC_start = 0
+            self.rangeC_start = 0
+            self.upperC_start = 0
+
+            for k in xrange(m):
+                if self.Lcon[k] == self.Ucon[k]:
+                    self.nequalC += 1
+                elif self.Lcon[k] > self.negInfinity and self.Ucon[k] == self.Infinity:
+                    self.nlowerC += 1
+                elif self.Lcon[k] > self.negInfinity and self.Ucon[k] < self.Infinity:
+                    self.nrangeC += 1
+                elif self.Lcon[k] == self.negInfinity and self.Ucon[k] < self.Infinity:
+                    self.nupperC += 1
+            # end for
+
+            self.lowerC_start = self.nequalC
+            self.rangeC_start = self.nequalC + self.nlowerC
+            self.upperC_start = self.nequalC + self.nlowerC + self.nrangeC
+
+            # Assert proper ordering:
+            if self.nlowerC > 0:
+                j =  self.lowerC_start
+                if not (self.Lcon[j] > self.negInfinity and self.Ucon[j] == self.Infinity):
+                    raise ValueError('Constraints badly ordered or free constraints present')
+            if self.nrangeC > 0:
+                j = self.rangeC_start
+                if not (self.Lcon[j] > self.negInfinity and self.Ucon[j] < self.Infinity):
+                    raise ValueError('Constraints badly ordered or free constraints present')
+            if self.nupperC > 0:
+                j = self.upperC_start
+                if not (self.Lcon[j] == self.negInfinity and self.Ucon[j] < self.Infinity):
+                    raise ValueError('Constraints badly ordered or free constraints present')
 
         else:
-        	# Auto detection of number of constraints in each class
-        	k = 0
-        	self.equalC_start = 0
-        	while self.Lcon[k] == self.Ucon[k]:
-        		k += 1
-        	self.nequalC = k
-        	ktotal = k
+            self.equalC_start = 0
+            self.lowerC_start = 0
+            self.rangeC_start = 0
+            self.upperC_start = 0
 
-        	self.lowerC_start = ktotal
-        	while self.Lcon[k] > self.negInfinity and self.Ucon[k] == self.Infinity:
-        		k += 1
-        	self.nlowerC = k - ktotal
-        	ktotal += k
-
-        	self.rangeC_start = ktotal
-        	while self.Lcon[k] > self.negInfinity and self.Ucon[k] < self.Infinity:
-        		k += 1
-        	self.nrangeC = k - ktotal
-        	ktotal += k
-
-        	self.upperC_start = ktotal
-        	while self.Lcon[k] == self.negInfinity and self.Ucon[k] < self.Infinity:
-        		k += 1
-        	self.nupperC = k - ktotal
-        	ktotal += k
-
-        	if ktotal != self.m:
-        		raise ValueError('Constraint bounds badly ordered or free constraints present')
+            self.nequalC = 0
+            self.nlowerC = 0
+            self.nrangeC = 0
+            self.nupperC = 0
 
         # Same index values as defined above, shorthand
         self.neC = self.nequalC
@@ -193,7 +221,7 @@ class MFModel_mini(NLPModel_mini):
     def __init__(self, n=0, m=0, name='Generic Matrix-Free', **kwargs):
 
         # Standard NLP initialization
-        NLPModel.__init__(self,n=n,m=m,name=name,**kwargs)
+        NLPModel_mini.__init__(self,n=n,m=m,name=name,**kwargs)
 
 
     def jac(self, x, **kwargs):
@@ -251,8 +279,9 @@ class SlackNLP_mini( MFModel_mini ):
         self.n_con_up = nlp.nupperC + nlp.nrangeC
 
         # Update effective number of variables and constraints
-        n = self.original_n + n_con_low + n_con_up
+        n = self.original_n + self.n_con_low + self.n_con_up
         m = self.original_m + nlp.nrangeC
+        m_list = [m,0,0,0]
 
         Lvar = np.zeros(n)
         Lvar[:self.original_n] = nlp.Lvar
@@ -261,8 +290,8 @@ class SlackNLP_mini( MFModel_mini ):
 
         Lcon = Ucon = np.zeros(m)
 
-        MFModel.__init__(self, n=n, m=m, name='Slack NLP', Lvar=Lvar, \
-                          Uvar=Uvar, Lcon=Lcon, Ucon=Ucon)
+        MFModel_mini.__init__(self, n=n, m=m, name='Slack NLP', Lvar=Lvar, \
+                          Uvar=Uvar, Lcon=Lcon, Ucon=Ucon, m_list=m_list)
 
         self.hprod = nlp.hprod
         self.hiprod = nlp.hiprod
@@ -303,9 +332,9 @@ class SlackNLP_mini( MFModel_mini ):
 
         same_x = norm(x[:self.original_n] - self._cache['x']) < eps
 
-        if self._last_obj is not None and same_x:
+        if self._cache['obj'] is not None and same_x:
             f = self._cache['obj']
-        elif self._last_obj is None and same_x:
+        elif self._cache['obj'] is None and same_x:
             f = self.nlp.obj(self._cache['x'])
             self._cache['obj'] = copy.deepcopy(f)
         else:
@@ -360,7 +389,7 @@ class SlackNLP_mini( MFModel_mini ):
         """
         mslow = self.original_n + self.n_con_low
         msup  = mslow + self.n_con_up
-        s_low = x[on:mslow]    # len(s_low) = n_con_low
+        s_low = x[self.on:mslow]    # len(s_low) = n_con_low
         s_up  = x[mslow:msup]  # len(s_up)  = n_con_up
 
         c = np.empty(self.m)
@@ -407,10 +436,10 @@ class SlackNLP_mini( MFModel_mini ):
 
     def jprod(self, x, v, **kwargs):
 
-        p = np.zeros(m)
+        p = np.zeros(self.m)
 
         # Perform jprod and account for upper bounded constraints
-        p[:self.om] = nlp.jprod(x[:self.on], v[:self.on], **kwargs)
+        p[:self.om] = self.nlp.jprod(x[:self.on], v[:self.on], **kwargs)
         p[self.nlp.uCs:self.om] *= -1.0
         p[self.om:] = p[self.nlp.rCs:self.nlp.uCs]
         p[self.om:] *= -1.0
@@ -430,12 +459,12 @@ class SlackNLP_mini( MFModel_mini ):
 
     def jtprod(self, x, v, **kwargs):
 
-        p = np.zeros(n)
+        p = np.zeros(self.n)
         vmp = v[:self.om].copy()
         vmp[self.nlp.uCs:self.om] *= -1.0
         vmp[self.nlp.rCs:self.nlp.uCs] -= v[self.om:]
 
-        p[:self.on] = nlp.jtprod(x[:self.on], vmp, **kwargs)
+        p[:self.on] = self.nlp.jtprod(x[:self.on], vmp, **kwargs)
 
         # Insert contribution of slacks on general constraints
         bot = self.on           # Lower bound
@@ -444,7 +473,7 @@ class SlackNLP_mini( MFModel_mini ):
         p[bot:bot+self.nlp.nrC] = -v[self.nlp.rCs:self.nlp.uCs]
         bot += self.nlp.nrC     # Upper bound
         p[bot:bot+self.nlp.nuC]  = -v[self.nlp.uCs:self.om]
-        bot += nupperC          # Upper range
+        bot += self.nlp.nuC     # Upper range
         p[bot:bot+self.nlp.nrC]  = -v[self.om:]
 
         return p
