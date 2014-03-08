@@ -117,7 +117,7 @@ class InverseLBFGS:
 
         q = v.copy()
         s = self.s ; y = self.y ; ys = self.ys ; alpha = self.alpha
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert - 1 - i) % self.npairs
             if ys[k] is not None:
                 alpha[k] = numpy.dot(s[:,k], q)/ys[k]
@@ -130,7 +130,7 @@ class InverseLBFGS:
                 self.gamma = ys[last]/numpy.dot(y[:,last],y[:,last])
                 r *= self.gamma
 
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert + i) % self.npairs
             if ys[k] is not None:
                 beta = numpy.dot(y[:,k], r)/ys[k]
@@ -201,14 +201,14 @@ class LBFGS(InverseLBFGS):
                 r /= self.gamma
 
         paircount = 0
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert + i) % self.npairs
             if ys[k] is not None:
                 a[paircount] = numpy.dot(r[:],s[:,k])
                 paircount += 1
 
         j = 0
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert + i) % self.npairs
             if ys[k] is not None:
                 a[paircount+j] = numpy.dot(q[:],y[:,k])
@@ -216,13 +216,13 @@ class LBFGS(InverseLBFGS):
 
         # Populate small matrix to be inverted
         k_ind = 0
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert + i) % self.npairs
             if ys[k] is not None:
                 minimat[paircount+k_ind,paircount+k_ind] = -ys[k]
                 minimat[k_ind,k_ind] = numpy.dot(s[:,k],s[:,k])/self.gamma
                 l_ind = 0
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % self.npairs
                     if ys[l] is not None:
                         minimat[k_ind,paircount+l_ind] = numpy.dot(s[:,k],y[:,l])
@@ -236,7 +236,7 @@ class LBFGS(InverseLBFGS):
             rng = 2*paircount
             b = numpy.linalg.solve(minimat[0:rng,0:rng],a[0:rng])
 
-        for i in range(paircount):
+        for i in xrange(paircount):
             k = (self.insert - paircount + i) % self.npairs
             r -= (b[i]/self.gamma)*s[:,k]
             r -= b[i+paircount]*y[:,k]
@@ -287,14 +287,14 @@ class LBFGS_unrolling(InverseLBFGS):
         a = numpy.zeros((self.n, self.npairs), 'd')
 
         paircount = 0
-        for i in range(self.npairs):
+        for i in xrange(self.npairs):
             k = (self.insert + i) % self.npairs
             if ys[k] is not None:
                 b[:,k] = y[:,k] / ys[k]**.5
                 bv = numpy.dot(b[:,k], v[:])
                 q += bv * b[:,k]
                 a[:,k] = s[:,k].copy()
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % self.npairs
                     if ys[l] is not None:
                         a[:,k] += numpy.dot(b[:,l], s[:,k]) * b[:,l]
@@ -354,13 +354,13 @@ class LBFGS_structured(InverseLBFGS):
                 self.gamma = ys[last]/numpy.dot(y[:,last],y[:,last])
                 q /= self.gamma
 
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 coef = (self.gamma*ys[k]/numpy.dot(s[:,k],s[:,k]))**0.5
                 a[:,k] = y[:,k] + coef * s[:,k]/self.gamma
                 ad[:,k] = yd[:,k] - s[:,k]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % npairs
                     if ys[l] is not None:
                         alTs = numpy.dot(a[:,l], s[:,k])/aTs[l]
@@ -457,10 +457,10 @@ class LBFGS_new(object):
                 self.gamma = ys / numpy.dot(new_y, new_y)
 
             # Recompute stored data for the matvec computation
-            for i in range(self.stored_pairs):
+            for i in xrange(self.stored_pairs):
                 self.b[i] = numpy.dot(self.y[i],self.s[i])**(-0.5) * self.y[i]
                 self.a[i] = self.s[i]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     bTs = numpy.dot(self.b[j],self.s[i])
                     aTs = numpy.dot(self.a[j],self.s[i])
                     self.a[i] += bTs*self.b[j] - aTs*self.a[j]
@@ -493,7 +493,7 @@ class LBFGS_new(object):
         self.numMatVecs += 1
 
         w = v / self.gamma
-        for i in range(self.stored_pairs):
+        for i in xrange(self.stored_pairs):
             w += numpy.dot(self.b[i],v)*self.b[i] - numpy.dot(self.a[i],v)*self.a[i]
         # end for
         return w
@@ -536,10 +536,10 @@ class LBFGS_structured_new(LBFGS_new):
                 self.gamma = ys / numpy.dot(new_y, new_y)
 
             # Recompute stored data for the matvec computation
-            for i in range(self.stored_pairs):
+            for i in xrange(self.stored_pairs):
                 self.a[i] = self.s[i]/self.gamma
                 self.ad[i] = self.yd[i] - self.s[i]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     aTs_temp = np.dot(self.a[j],self.s[i])
                     adTs_temp = np.dot(self.ad[j],self.s[i])
                     Delta_s = (aTs_temp/self.aTs[j])*self.ad[j] + (adTs_temp/self.aTs[j])*self.a[j]
@@ -577,7 +577,7 @@ class LBFGS_structured_new(LBFGS_new):
         self.numMatVecs += 1
 
         w = v / self.gamma
-        for i in range(self.stored_pairs):
+        for i in xrange(self.stored_pairs):
             aTv = np.dot(self.a[i],v)
             adTv = np.dot(self.ad[i],v)
             w += (aTv/self.aTs[i])*self.ad[i] + (adTv/self.aTs[i])*self.a[i]

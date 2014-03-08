@@ -127,18 +127,18 @@ class LSR1(object):
                 q /= self.gamma
 
         paircount = 0
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 a[k] = np.dot(y[:,k],v[:]) - np.dot(s[:,k],q[:])
                 paircount += 1
 
         # Populate small matrix to be inverted
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 minimat[k,k] = ys[k] - np.dot(s[:,k],s[:,k])/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % npairs
                     if ys[l] is not None:
                         minimat[k,l] = np.dot(s[:,k],y[:,l]) - np.dot(s[:,k],s[:,l])/self.gamma
@@ -148,7 +148,7 @@ class LSR1(object):
             rng = paircount
             b = np.linalg.solve(minimat[0:rng,0:rng],a[0:rng])
 
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 q += b[k]*y[:,k] - b[k]/self.gamma*s[:,k]
@@ -187,13 +187,13 @@ class LSR1_unrolling(LSR1):
                 self.gamma = ys[last]/np.dot(y[:,last],y[:,last])
                 q /= self.gamma
 
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 a[:,k] = y[:,k] - s[:,k]/self.gamma
                 #print 'a:', a[:,k]
                 #print 's:', s[:,k]
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % npairs
                     if ys[l] is not None:
                         a[:,k] -= np.dot(a[:,l], s[:,k])/aTs[l] * a[:,l]
@@ -240,12 +240,12 @@ class LSR1_structured(LSR1):
                 self.gamma = ys[last]/np.dot(y[:,last],y[:,last])
                 q /= self.gamma
 
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 a[:,k] = y[:,k] - s[:,k]/self.gamma
                 ad[:,k] = yd[:,k] - s[:,k]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % npairs
                     if ys[l] is not None:
                         alTs = np.dot(a[:,l], s[:,k])
@@ -338,18 +338,18 @@ class InverseLSR1(LSR1):
                 q *= self.gamma
 
         paircount = 0
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 a[k] = np.dot(s[:,k],v[:]) - np.dot(y[:,k],q[:])
                 paircount += 1
 
         # Populate small matrix to be inverted
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 minimat[k,k] = -ys[k] - np.dot(y[:,k],y[:,k])*self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     l = (self.insert + j) % npairs
                     if ys[l] is not None:
                         minimat[k,l] = np.dot(y[:,k],s[:,l]) - np.dot(y[:,k],y[:,l])*self.gamma
@@ -359,7 +359,7 @@ class InverseLSR1(LSR1):
             rng = paircount
             b = np.linalg.solve(minimat[0:rng,0:rng],a[0:rng])
 
-        for i in range(npairs):
+        for i in xrange(npairs):
             k = (self.insert + i) % npairs
             if ys[k] is not None:
                 q += b[k]*s[:,k] - b[k]*self.gamma*y[:,k]
@@ -450,9 +450,9 @@ class LSR1_new(object):
             if self.scaling:
                 self.gamma = self.ys_new / self.yy_new
 
-            for i in range(self.stored_pairs):
+            for i in xrange(self.stored_pairs):
                 self.a[i] = self.y[i] - self.s[i]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     self.a[i] -= np.dot(self.a[j], self.s[i])/self.aTs[j] * self.a[j]
                 self.aTs[i] = np.dot(self.a[i], self.s[i])
             # end for
@@ -483,7 +483,7 @@ class LSR1_new(object):
         self.numMatVecs += 1
 
         w = v / self.gamma
-        for i in range(self.stored_pairs):
+        for i in xrange(self.stored_pairs):
             w += np.dot(self.a[i],v)/self.aTs[i] * self.a[i]
         # end for
         return w
@@ -541,10 +541,10 @@ class LSR1_structured_new(LSR1_new):
                 # ** This scaling criterion should probably change for the structured update
                 self.gamma = ys / np.dot(new_y, new_y)
 
-            for i in range(self.stored_pairs):
+            for i in xrange(self.stored_pairs):
                 self.a[i] = self.y[i] - self.s[i]/self.gamma
                 self.ad[i] = self.yd[i] - self.s[i]/self.gamma
-                for j in range(i):
+                for j in xrange(i):
                     aTs_temp = np.dot(self.a[j],self.s[i])
                     adTs_temp = np.dot(self.ad[j],self.s[i])
                     Delta_s = (aTs_temp/self.aTs[j])*self.ad[j] + (adTs_temp/self.aTs[j])*self.a[j]
@@ -580,7 +580,7 @@ class LSR1_structured_new(LSR1_new):
         self.numMatVecs += 1
 
         w = v / self.gamma
-        for i in range(self.stored_pairs):
+        for i in xrange(self.stored_pairs):
             aTv = np.dot(self.a[i],v)
             adTv = np.dot(self.ad[i],v)
             w += (aTv/self.aTs[i])*self.ad[i] + (adTv/self.aTs[i])*self.a[i]
