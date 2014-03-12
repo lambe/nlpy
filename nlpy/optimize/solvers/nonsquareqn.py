@@ -218,7 +218,8 @@ class NonsquareQuasiNewton:
         very fast for small- and medium-sized dense matrices.
         """
         self.numMatVecs += 1
-        w = self.jprod(self.x, v, sparse_only=True)
+        # w = self.jprod(self.x, v, sparse_only=True)
+        w = np.zeros(self.m)    # Assume no sparse part
         # w[:self.m_dense] += np.dot(self.A,v[:self.n_dense])
         w[:self.m_dense] += self.dense_matvec(v[:self.n_dense])
         return w
@@ -230,7 +231,8 @@ class NonsquareQuasiNewton:
         approximation and the vector w. 
         """
         self.numRMatVecs += 1
-        v = self.jtprod(self.x, w, sparse_only=True)
+        # v = self.jtprod(self.x, w, sparse_only=True)
+        v = np.zeros(self.n)    # Assume no sparse part
         # A dot-product shortcut provided w stays a vector
         # v[:self.n_dense] += np.dot(w[:self.m_dense],self.A)
         v[:self.n_dense] += self.dense_rmatvec(w[:self.m_dense])
