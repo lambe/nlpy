@@ -439,7 +439,9 @@ class SlackNLP_mini( MFModel_mini ):
         p = np.zeros(self.m)
 
         # Perform jprod and account for upper bounded constraints
-        p[:self.om] = self.nlp.jprod(x[:self.on], v[:self.on], **kwargs)
+        if kwargs.get('sparse_only',False) == False:
+            p[:self.om] = self.nlp.jprod(x[:self.on], v[:self.on], **kwargs)
+        # (Otherwise, do not call the function - assume constraint set is dense) 
         p[self.nlp.uCs:self.om] *= -1.0
         p[self.om:] = p[self.nlp.rCs:self.nlp.uCs]
         p[self.om:] *= -1.0
@@ -464,7 +466,9 @@ class SlackNLP_mini( MFModel_mini ):
         vmp[self.nlp.uCs:self.om] *= -1.0
         vmp[self.nlp.rCs:self.nlp.uCs] -= v[self.om:]
 
-        p[:self.on] = self.nlp.jtprod(x[:self.on], vmp, **kwargs)
+        if kwargs.get('sparse_only',False) == False:
+            p[:self.on] = self.nlp.jtprod(x[:self.on], vmp, **kwargs)
+        # (Otherwise, do not call the function - assume constraint set is dense) 
 
         # Insert contribution of slacks on general constraints
         bot = self.on           # Lower bound
