@@ -20,7 +20,7 @@ from mpi4py import MPI
 # =============================================================================
 from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
-from nlpy.model.nlp_mini import NLPModel_mini, SlackNLP_mini
+# from nlpy.model.nlp_mini import NLPModel_mini, SlackNLP_mini
 from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured, LBFGS_new
 from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new
 from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
@@ -40,7 +40,7 @@ from nlpy.tools.utils import where
 from nlpy.tools.timing import cputime
 
 
-class AugmentedLagrangian(NLPModel_mini):
+class AugmentedLagrangian(NLPModel):
     """
     This class is a reformulation of an NLP, used to compute the
     augmented Lagrangian function, gradient, and approximate Hessian in a
@@ -52,11 +52,11 @@ class AugmentedLagrangian(NLPModel_mini):
     def __init__(self, nlp, **kwargs):
 
         # Analyze NLP to add slack variables to the formulation
-        if not isinstance(nlp, SlackNLP_mini):
-            self.nlp = SlackNLP_mini(nlp, keep_variable_bounds=True, **kwargs)
+        if not isinstance(nlp, SlackNLP):
+            self.nlp = SlackNLP(nlp, keep_variable_bounds=True, **kwargs)
         else: self.nlp = nlp
 
-        NLPModel_mini.__init__(self, n=self.nlp.n, m=0, 
+        NLPModel.__init__(self, n=self.nlp.n, m=0, 
             name='bound-constrained augmented Lagrangian',
             x0=self.nlp.x0, Lvar=self.nlp.Lvar, Uvar=self.nlp.Uvar)
 
