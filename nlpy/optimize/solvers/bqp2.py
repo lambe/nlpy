@@ -404,6 +404,91 @@ class BQP(object):
 
         return (xps, q_xps, step)
 
+    def projected_gradient(self, x0, g=None, active_set=None, qval=None, **kwargs):
+        """
+        Perform a sequence of projected gradient steps starting from x0.
+        If the actual gradient at x is known, it should be passed using the
+        `g` keyword.
+        If the active set at x0 is known, it should be passed using the
+        `active_set` keyword.
+        If the value of the quadratic objective at x0 is known, it should
+        be passed using the `qval` keyword.
+
+        Return (x,(lower,upper)) where x is an updated iterate that satisfies
+        a sufficient decrease condition or at which the active set, given by
+        (lower,upper), settled down.
+        """
+        maxiter = kwargs.get('maxiter', 10)
+        check_feasible = kwargs.get('check_feasible', True)
+
+        if check_feasible:
+            self.check_feasible(x0)
+
+        if g is None:
+            g = self.qp.grad(x0)
+
+        if qval is None:
+            qval = self.qp.obj(x0)
+
+        if active_set is None:
+            active_set = self.get_active_set(x0)
+        lower, upper = active_set
+
+        self.log.debug('Entering projected gradient with q = %7.1e' % qval)
+
+        x = x0.copy()
+        settled_down = False
+        sufficient_decrease = False
+        best_decrease = 0
+        iter = 0
+
+        while not settled_down and not sufficient_decrease and \
+              iter < maxiter:
+
+            iter += 1
+            qOld = qval
+            # TODO: Use appropriate initial steplength.
+            (x, qval, self.cauchy_steplength) = self.projected_linesearch(x, g, -g, qval, step=self.cauchy_steplength)
+
+            # Check decrease in objective.
+            decrease = qOld - qval
+
+            msg  = 'Current / best decrease in projected gradient :'
+            msg += ' %7.1e / %7.1e' % (decrease, best_decrease)
+            self.log.debug(msg)
+
+            sufficient_decrease = decrease <= self.pgrad_reltol * best_decrease
+            best_decrease = max(best_decrease, decrease)
+
+            # Check active set at updated iterate.
+            lowerTrial, upperTrial = self.get_active_set(x)
+            settled_down = identical(lower, lowerTrial) and \
+                           identical(upper, upperTrial)
+            lower, upper = lowerTrial, upperTrial
+
+        return (x, (lower, upper))
+
+    def to_boundary(self, x, d, free_vars, **kwargs):
+        """
+        Given vectors `x` and `d` and some bounds on x,
+        return a positive alpha such that
+
+          `x + alpha * d = boundary
+        """
+        check_feasible = kwargs.get('check_feasible', True)
+        if check_feasible:
+            self.check_feasible(x)
+
+        # Obtain stepsize to nearest and farthest breakpoints.
+        bk_min, _ = self.breakpoints(x, d)
+
+        #x += bk_min * d
+        x = self.project(x + bk_min * d)  # To avoid tiny rounding errors.
+
+        # Do another projected gradient update
+        (x, (lower, upper)) = self.projected_gradient(x)
+
+        return (x, (lower, upper))
 
     def solve(self, **kwargs):
 
@@ -450,6 +535,8 @@ class BQP(object):
         self.log.info(self.header)
         self.log.info(self.hline)
         self.log.info(self.format0 % (iter, 0.0, pgNorm, ''))
+
+        self.cauchy_steplength = 1.0
 
         while not (exitOptimal or exitIter or exitStalling or exitTR):
 

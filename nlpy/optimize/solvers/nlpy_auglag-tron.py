@@ -3,15 +3,8 @@
 from __future__ import with_statement # Required in 2.5
 from nlpy import __version__
 from nlpy.model import MFAmplModel
-from nlpy.optimize.solvers.sbmin import SBMINFramework, SBMINLqnFramework, SBMINPartialLqnFramework, \
-                                        SBMINStructuredLqnFramework
-from nlpy.optimize.solvers.auglag2 import AugmentedLagrangianFramework, \
-                                          AugmentedLagrangianLbfgsFramework,\
-                                          AugmentedLagrangianLsr1Framework, \
-                                          AugmentedLagrangianPartialLbfgsFramework, \
-                                          AugmentedLagrangianPartialLsr1Framework, \
-                                          AugmentedLagrangianStructuredLbfgsFramework, \
-                                          AugmentedLagrangianStructuredLsr1Framework
+from nlpy.optimize.solvers.tron import TronFramework
+from nlpy.optimize.solvers.auglag2 import AugmentedLagrangianTronFramework
 from nlpy.tools.timing import cputime
 from nlpy.tools.logs import config_logger
 from optparse import OptionParser
@@ -39,20 +32,7 @@ def pass_to_auglag(nlp, **kwargs):
     qn = kwargs.get('quasi_newton',None)
     t = cputime()
 
-    if qn == None:
-        auglag = AugmentedLagrangianFramework(nlp, SBMINFramework,
-                    **kwargs)
-    elif qn == 'LBFGS':
-        auglag = AugmentedLagrangianPartialLbfgsFramework(nlp, SBMINPartialLqnFramework,
-                    **kwargs)
-    elif qn == 'LSR1':
-        auglag = AugmentedLagrangianPartialLsr1Framework(nlp, SBMINPartialLqnFramework,
-                    **kwargs)
-    elif qn == 'SLBFGS':
-        auglag = AugmentedLagrangianStructuredLbfgsFramework(nlp, SBMINStructuredLqnFramework,
-                    **kwargs)
-    elif qn == 'SLSR1':
-        auglag = AugmentedLagrangianStructuredLsr1Framework(nlp, SBMINStructuredLqnFramework,
+    auglag = AugmentedLagrangianTronFramework(nlp, TronFramework,
                     **kwargs)
 
     t_setup = cputime() - t    # Setup time.
@@ -78,26 +58,9 @@ where problem1 through problemN represent nonlinear programs."""
 # Define allowed command-line options
 parser = OptionParser(usage=usage_msg, version='%prog version ' + __version__)
 
-parser.add_option("-s", "--magic_steps", action="store", type="string",
-                  default=None, dest="magic_steps",
-                  help="Enable magical steps (None, 'cons': for conservative, or \
-                        'agg': for aggressive)")
-parser.add_option("-m", "--monotone", action="store_true",
-                  default=False, dest="monotone",
-                  help="Enable non monotone strategy")
-parser.add_option("-y", "--nocedal_yuan", action="store_true",
-                  default=False, dest="ny",
-                  help="Enable Nocedal-Yuan backtracking strategy")
 parser.add_option("-l", "--least_square_multipliers", action="store_true",
                   default=False, dest="least_squares_pi",
                   help="Enable least-square estimate of the Lagrange multipliers")
-parser.add_option("-q", "--quasi_newton", action="store", type="string",
-                  default=None, dest="quasi_newton",
-                  help="Use quasi-newton approximation of Hessian \
-                        (None, LBFGS, LSR1)")
-parser.add_option("-Q", "--qn_pairs", action="store", type="int",
-                  default=5, dest="qn_pairs",
-                  help="Number of pairs used in the Quasi Newton Hessian approximation")
 parser.add_option("-i", "--iter", action="store", type="int", default=None,
                   dest="maxiter",  help="Specify maximum number of iterations")
 parser.add_option("-t", "--time", action="store", type="int", default=1000,
@@ -116,16 +79,7 @@ parser.add_option("-o", "--output_file", action="store", type="string",
 opts = {}
 if options.maxiter is not None:
     opts['max_inner_iter'] = options.maxiter
-if options.magic_steps is not None:
-    if options.magic_steps == 'agg':
-        opts['magic_steps_agg'] = True
-    elif options.magic_steps == 'cons':
-        opts['magic_steps_cons'] = True
-opts['ny'] = options.ny
 opts['least_squares_pi'] = options.least_squares_pi
-opts['quasi_newton'] = options.quasi_newton
-opts['qn_pairs'] = options.qn_pairs
-opts['monotone'] = options.monotone
 opts['print_level'] = options.print_level
 opts['maxtime'] = options.maxtime
 
@@ -151,8 +105,8 @@ if multiple_problems:
     nlpylogger.propagate = False
 
     # Configure subproblem logger.
-    config_logger('nlpy.auglag',
-                filename='auglag.log',
+    config_logger('nlpy.auglag-tron',
+                filename='auglag-tron.log',
                 filemode='w',
                 stream=None,
                 propagate=False)
@@ -174,42 +128,23 @@ else:
         hndlr = logging.FileHandler(options.output_file)
     hndlr.setFormatter(fmt)
 
-    # Configure auglag logger.
-    auglaglogger = logging.getLogger('nlpy.auglag')
+    # Configure auglag-tron logger.
+    auglaglogger = logging.getLogger('nlpy.auglag-tron')
     auglaglogger.addHandler(hndlr)
     auglaglogger.propagate = False
     auglaglogger.setLevel(logging.INFO)
     if options.print_level >= 5:
         auglaglogger.setLevel(logging.DEBUG)
 
-    # Configure sbmin logger.
+    # Configure tron logger.
     if options.print_level >= 2:
-        sbminlogger = logging.getLogger('nlpy.sbmin')
+        sbminlogger = logging.getLogger('nlpy.tron')
         sbminlogger.setLevel(logging.INFO)
         sbminlogger.addHandler(hndlr)
         sbminlogger.propagate = False
         if options.print_level >= 5:
             sbminlogger.setLevel(logging.DEBUG)
 
-
-    # Configure bqp logger.
-    if options.print_level >= 3:
-        bqplogger = logging.getLogger('nlpy.bqp')
-        bqplogger.setLevel(logging.DEBUG)
-        bqplogger.addHandler(hndlr)
-        bqplogger.propagate = False
-        if options.print_level >= 5:
-            bqplogger.setLevel(logging.DEBUG)
-
-
-    # Configure pcg logger
-    if options.print_level >= 4:
-        pcglogger = logging.getLogger('nlpy.pcg')
-        pcglogger.setLevel(logging.DEBUG)
-        pcglogger.addHandler(hndlr)
-        pcglogger.propagate = False
-        if options.print_level >= 5:
-            pcglogger.setLevel(logging.DEBUG)
 
 def apply_scaling(nlp):
     gNorm = nlp.compute_scaling_obj()
@@ -252,7 +187,7 @@ if not multiple_problems and not error:
     auglaglogger.info('Final variables: %-s' % repr(AUGLAG.x))
     auglaglogger.info('')
     auglaglogger.info('--------------------------------')
-    auglaglogger.info('Auglag: End of Execution')
+    auglaglogger.info('Auglag-Tron: End of Execution')
     auglaglogger.info('  Problem                               : %-s' % ProblemName)
     auglaglogger.info('  Number of variables                   : %-d' % nlp.n)
     auglaglogger.info('  Number of linear constraints          : %-d' % nlp.nlin)
