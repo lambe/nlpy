@@ -5,6 +5,7 @@
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.tools import norms
 from nlpy.tools.timing import cputime
+from nlpy.tools.utils import NullHandler
 from nlpy.tools.exceptions import UserExitRequest
 from nlpy.optimize.solvers.pytron import dtron
 from math import sqrt
@@ -91,6 +92,7 @@ class TronFramework:
         self.f      = None
         self.f0     = None
         self.g      = None
+        self.g_old  = None
         self.gpnorm = None
         self.task   = None
 
@@ -111,7 +113,10 @@ class TronFramework:
         # Setup the logger. Install a NullHandler if no output needed.
         logger_name = kwargs.get('logger_name', 'nlpy.tron')
         self.log = logging.getLogger(logger_name)
-        self.log.addHandler(logging.NullHandler())
+        try:
+            self.log.addHandler(logging.NullHandler())
+        except:
+            self.log.addHandler(NullHandler())
         if not self.verbose:
             self.log.propagate=False
 
@@ -206,6 +211,7 @@ class TronFramework:
                 self.gpnorm = self._gpnorm2(self.x, self.g, nlp.Lvar, nlp.Uvar)
 
             else:
+                pdb.set_trace()
                 # Calculate the number of CG iterations made in this inner iteration.
                 cgiter_periter = cgiter - cgiter_old
                 cgiter_old = cgiter

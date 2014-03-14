@@ -853,7 +853,7 @@ class AugmentedLagrangianFramework(object):
 
     def SetupInnerSolver(self, **kwargs):
         return self.innerSolver(self.alprob, self.tr, TRSolver,
-                                reltol=self.omega, x0=self.x,
+                                abstol=self.omega, x0=self.x,
                                 maxiter=self.max_inner_iter/10., verbose=True,
                                 update_on_rejected_step=self.update_on_rejected_step, 
 								warmstart=self.warmstart, shelf_handle=self.shelf_handle, 
