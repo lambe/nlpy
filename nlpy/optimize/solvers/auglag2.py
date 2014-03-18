@@ -1257,5 +1257,5 @@ class AugmentedLagrangianPartialLsr1TronFramework(AugmentedLagrangianQuasiNewton
         self.alprob = AugmentedLagrangianPartialLsr1(nlp,**kwargs)
 
     def SetupInnerSolver(self, **kwargs):
-        return self.innerSolver(self.alprob, reltol=self.omega, x0=self.x, **kwargs)
+        return self.innerSolver(self.alprob, reltol=self.omega, x0=self.x, quasi_newton='LSR1', **kwargs)
 

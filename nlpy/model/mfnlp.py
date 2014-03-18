@@ -11,7 +11,7 @@ __docformat__ = 'restructuredtext'
 # Standard Python modules
 # =============================================================================
 import copy
-
+import pdb
 # =============================================================================
 # External Python modules
 # =============================================================================
@@ -189,19 +189,23 @@ class SlackNLP( MFModel ):
         # same_x = self._last_x_hash == x_hash
         # same_x = (self._last_x == x[:self.original_n]).all()
 
+        # pdb.set_trace()
         same_x = norm(x[:self.original_n] - self._cache['x']) < eps
 
-        if self._cache['obj'] is not None and same_x:
-            f = self._cache['obj']
-        elif self._cache['obj'] is None and same_x:
-            f = self.nlp.obj(self._cache['x'])
-            self._cache['obj'] = copy.deepcopy(f)
-        else:
-            f = self.nlp.obj(x[:self.original_n])
-            self._cache['x'] = x[:self.original_n].copy()
-            self._cache['obj'] = copy.deepcopy(f)
-            self._cache['cons'] = None
-            self._cache['grad'] = None
+        # if self._cache['obj'] is not None and same_x:
+        #     f = self._cache['obj']
+        # elif self._cache['obj'] is None and same_x:
+        #     f = self.nlp.obj(self._cache['x'])
+        #     self._cache['obj'] = copy.deepcopy(f)
+        # else:
+        #     f = self.nlp.obj(x[:self.original_n])
+        #     self._cache['x'] = x[:self.original_n].copy()
+        #     self._cache['obj'] = copy.deepcopy(f)
+        #     self._cache['cons'] = None
+        #     self._cache['grad'] = None
+
+        # Debug mode
+        f = self.nlp.obj(x[:self.original_n])
 
         return f
 
@@ -219,17 +223,20 @@ class SlackNLP( MFModel ):
         # same_x = self._last_x_hash == x_hash
         # same_x = (self._last_x == x[:self.original_n]).all()
 
-        if self._cache['grad'] is not None and same_x:
-            g[:self.original_n] = self._cache['grad']
-        elif self._cache['grad'] is None and same_x:
-            g[:self.original_n] = self.nlp.grad(self._cache['x'])
-            self._cache['grad'] = copy.deepcopy(g[:self.original_n])
-        else:
-            g[:self.original_n] = self.nlp.grad(x[:self.original_n])
-            self._cache['x'] = x[:self.original_n].copy()
-            self._cache['obj'] = None
-            self._cache['cons'] = None
-            self._cache['grad'] = copy.deepcopy(g[:self.original_n])
+        # if self._cache['grad'] is not None and same_x:
+        #     g[:self.original_n] = self._cache['grad']
+        # elif self._cache['grad'] is None and same_x:
+        #     g[:self.original_n] = self.nlp.grad(self._cache['x'])
+        #     self._cache['grad'] = copy.deepcopy(g[:self.original_n])
+        # else:
+        #     g[:self.original_n] = self.nlp.grad(x[:self.original_n])
+        #     self._cache['x'] = x[:self.original_n].copy()
+        #     self._cache['obj'] = None
+        #     self._cache['cons'] = None
+        #     self._cache['grad'] = copy.deepcopy(g[:self.original_n])
+
+        # Debug mode
+        g[:self.original_n] = self.nlp.grad(x[:self.original_n])
 
         return g
 
@@ -274,17 +281,20 @@ class SlackNLP( MFModel ):
         # same_x = self._last_x_hash == x_hash
         # same_x = (self._last_x == x[:self.original_n]).all()
 
-        if self._cache['cons'] is not None and same_x:
-            c[:om] = self._cache['cons']
-        elif self._cache['cons'] is None and same_x:
-            c[:om] = self.nlp.cons(self._cache['x'])
-            self._cache['cons'] = copy.deepcopy(c[:om])
-        else:
-            c[:om] = self.nlp.cons(x[:on])
-            self._cache['x'] = x[:on]
-            self._cache['obj'] = None
-            self._cache['cons'] = copy.deepcopy(c[:om])
-            self._cache['grad'] = None
+        # if self._cache['cons'] is not None and same_x:
+        #     c[:om] = self._cache['cons']
+        # elif self._cache['cons'] is None and same_x:
+        #     c[:om] = self.nlp.cons(self._cache['x'])
+        #     self._cache['cons'] = copy.deepcopy(c[:om])
+        # else:
+        #     c[:om] = self.nlp.cons(x[:on])
+        #     self._cache['x'] = x[:on]
+        #     self._cache['obj'] = None
+        #     self._cache['cons'] = copy.deepcopy(c[:om])
+        #     self._cache['grad'] = None
+
+        # Debug mode
+        c[:om] = self.nlp.cons(x[:on])
 
         c[om:om+nrangeC] = c[rangeC]
 
