@@ -96,6 +96,10 @@ class TronFramework:
         self.gpnorm = None
         self.task   = None
 
+        self.save_lg = False
+        self.lg_old = None
+        self.lg = None
+
         self.tron = troninter(nlp.n)
 
         self.reltol  = kwargs.get('reltol', 1.0e-7)#self.nlp.stop_d)
@@ -174,6 +178,9 @@ class TronFramework:
         self.gpnorm  = self._gpnorm2(self.x, self.g, nlp.Lvar, nlp.Uvar)
         self.gpnorm0 = self.gpnorm
 
+        if self.save_lg:
+            self.lg = self.nlp.dual_feasibility(self.x)
+
         stoptol = max(self.abstol, self.reltol * self.gpnorm)
         exitUser = exitInner = False
         exitOptimal = self.gpnorm <= stoptol
@@ -208,6 +215,10 @@ class TronFramework:
                 self.g_old = self.g.copy()
                 self.g = self.nlp.grad(self.x)
                 self.gpnorm = self._gpnorm2(self.x, self.g, nlp.Lvar, nlp.Uvar)
+
+                if self.save_lg:
+                    self.lg_old = self.lg.copy()
+                    self.lg = self.nlp.dual_feasibility(self.x)
 
             else:
                 # Calculate the number of CG iterations made in this inner iteration.
@@ -254,6 +265,7 @@ class TronFramework:
             self.status = 'itr'
 
 
+
 class TronLqnFramework(TronFramework):
     """
     Class SBMINLqnFramework is a subclass of SBMINFramework. The method is
@@ -284,6 +296,26 @@ class TronLqnFramework(TronFramework):
         s = self.x - self.x_old
         y = self.g - self.g_old
         self.lqn.store(s, y)
+
+
+
+class TronPartialLqnFramework(TronFramework):
+    """
+    Limited-memory quasi-Newton approximation only applies to a part of the 
+    Hessian.
+    """
+    def __init__(self, nlp, **kwargs):
+        TronFramework.__init__(self, nlp, **kwargs)
+        self.save_lg = True
+
+
+    def PostIteration(self, **kwargs):
+        """
+        Update the quasi-Newton approximation.
+        """
+        s = self.x - self.x_old
+        y = self.lg - self.lg_old
+        self.nlp.hupdate(s, y)
 
 
 
