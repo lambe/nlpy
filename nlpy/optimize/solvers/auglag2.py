@@ -1276,3 +1276,18 @@ class AugmentedLagrangianPartialLsr1TronFramework(AugmentedLagrangianQuasiNewton
 
     def SetupInnerSolver(self, **kwargs):
         return self.innerSolver(self.alprob, abstol=self.omega, x0=self.x, **kwargs)        
+
+
+
+class AugmentedLagrangianTotalLsr1AdjBroyATronFramework(AugmentedLagrangianQuasiNewtonFramework):
+    """
+    Augmented Lagrangian algorithm using TRON as inner solver and L-SR1 Hessian approximation.
+    The approximation is only applied to the second-order terms of the Hessian.
+    """
+    def __init__(self, nlp, innerSolver, **kwargs):
+        prob_class = AugmentedLagrangianTotalLsr1AdjBroyA
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+
+    def SetupInnerSolver(self, **kwargs):
+        return self.innerSolver(self.alprob, abstol=self.omega, x0=self.x, **kwargs)        

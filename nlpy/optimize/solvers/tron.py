@@ -319,6 +319,33 @@ class TronPartialLqnFramework(TronFramework):
 
 
 
+class TronTotalLqnFramework(TronPartialLqnFramework):
+    """
+    Limited-memory quasi-Newton approximation only applies to a part of the 
+    Hessian. A separate quasi-Newton method approximates the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        TronPartialLqnFramework.__init__(self, nlp, **kwargs)
+        self.jrestart = kwargs.get('jrestart',-1)
+
+
+    def PostIteration(self, **kwargs):
+        """
+        Update the quasi-Newton approximation.
+        """
+        if self.jrestart > 0:
+            if self.iter % self.jrestart == 0:
+                self.nlp.jreset(self.x)
+        # Hessian update
+        s = self.x - self.x_old
+        y = self.lg - self.lg_old
+        self.nlp.hupdate(s, y)
+        # Jacobian update
+        if self.jrestart <= 0 or self.iter % self.jrestart != 0:
+            self.nlp.jupdate(self.x, new_s=s)
+
+
+
 if __name__ == '__main__':
     import nlpy_tron
 
