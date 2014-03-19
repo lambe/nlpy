@@ -547,9 +547,9 @@ class BQP(object):
             iter += 1
 
             #print 'iter:', iter
-            if iter > maxiter:
-                exitIter = True
-                continue
+            # if iter > maxiter:
+            #     exitIter = True
+            #     continue
 
             # Get an approximate Cauchy point for the problem
             x, qval, step = self.projected_linesearch(x, g, -pg, qval, use_bk_min=True)
@@ -744,6 +744,7 @@ class BQP(object):
             cgiter = cgiter_1 + cgiter_2  # Total CG iters in this BQP iteration.
             self.cgiter += cgiter         # Total CG iters so far.
             exitStalling = (np.linalg.norm(x-x_old)) <= 1e-18
+            exitIter = iter == maxiter
             self.log.info(self.format % (iter, qval, pgNorm, cgiter))
 
         self.log.info('          Total CG iterations = %d' % (self.cgiter))

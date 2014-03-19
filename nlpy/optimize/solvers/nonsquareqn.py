@@ -112,6 +112,7 @@ class NonsquareQuasiNewton:
         Restart the approximation by clearing all data on past updates.
         """
         self.x = x
+        self._vecfunc = self.vecfunc(self.x)
 
         if self.warmstart_init and self.shelf_handle != None:
             # Root processor pulls parts of the Jacobian off the shelf 
@@ -173,7 +174,6 @@ class NonsquareQuasiNewton:
             #     self.A[:,k] = self.jprod(self.x, unitvec)
         # end if
 
-        self._vecfunc = self.vecfunc(self.x)
         return
 
 
