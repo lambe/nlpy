@@ -141,7 +141,7 @@ class TronFramework:
         Default hprod based on nlp's hprod. User should overload to
         provide a custom routine, e.g., a quasi-Newton approximation.
         """
-        return self.nlp.hprod(self.x, self.nlp.pi0, v)
+        return self.nlp.hprod(self.x_old, self.nlp.pi0, v)
 
     def precon(self, v, **kwargs):
         """
@@ -195,7 +195,6 @@ class TronFramework:
 
         while not (exitUser or exitOptimal or exitIter or exitInner):
 
-            #print self.task
             self.task, self.x, predred, delta, cgiter = \
                 self.tron.solve(self.task, self.x, nlp.Lvar, nlp.Uvar, self.f, self.g,
                                 self.hprod, delta, frtol=1e-12,#self.reltol,
@@ -211,7 +210,6 @@ class TronFramework:
                 self.gpnorm = self._gpnorm2(self.x, self.g, nlp.Lvar, nlp.Uvar)
 
             else:
-                pdb.set_trace()
                 # Calculate the number of CG iterations made in this inner iteration.
                 cgiter_periter = cgiter - cgiter_old
                 cgiter_old = cgiter
