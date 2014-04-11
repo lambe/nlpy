@@ -280,7 +280,7 @@ class AugmentedLagrangianPartialLsr1(AugmentedLagrangianPartialQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianPartialQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=False, **kwargs)
 
 
 
@@ -330,8 +330,8 @@ class AugmentedLagrangianSplitLsr1(AugmentedLagrangianSplitQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
-        self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=False, **kwargs)
+        self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=False, **kwargs)
 
 
 
@@ -421,7 +421,7 @@ class AugmentedLagrangianTotalLsr1AdjBroyA(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=False, **kwargs)
         self.Jacapp = adjointBroydenA(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
@@ -435,7 +435,7 @@ class AugmentedLagrangianTotalLsr1AdjBroyB(AugmentedLagrangianTotalQuasiNewton):
     """
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
-        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=False, **kwargs)
         self.Jacapp = adjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
