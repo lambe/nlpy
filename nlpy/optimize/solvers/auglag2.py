@@ -642,8 +642,11 @@ class AugmentedLagrangianFramework(object):
 
         self.f0 = self.f = None
 
-        # Maximum number of total inner iterations
-        self.max_inner_iter = kwargs.get('max_inner_iter', 100*self.alprob.nlp.original_n)
+        # Maximum number of inner iterations per outer iteration, 
+        # total inner iterations, and outer iterations
+        self.max_inner_iter = kwargs.get('max_inner_iter', 10*self.alprob.nlp.original_n)
+        self.max_total_iter = kwargs.get('max_total_iter', 10*self.max_inner_iter)
+        self.max_outer_iter = kwargs.get('max_outer_iter', 50)
 
         self.update_on_rejected_step = False
 
@@ -854,7 +857,7 @@ class AugmentedLagrangianFramework(object):
     def SetupInnerSolver(self, **kwargs):
         return self.innerSolver(self.alprob, self.tr, TRSolver,
                                 abstol=self.omega, x0=self.x,
-                                maxiter=self.max_inner_iter/10., verbose=True,
+                                maxiter=self.max_inner_iter, verbose=True,
                                 update_on_rejected_step=self.update_on_rejected_step, 
 								warmstart=self.warmstart, shelf_handle=self.shelf_handle, 
                                 save_data=self.save_data, **kwargs)
@@ -1018,7 +1021,7 @@ class AugmentedLagrangianFramework(object):
             except UserExitRequest:
                 self.status = -3
 
-            exitIter = self.niter_total > self.max_inner_iter
+            exitIter = self.niter_total > self.max_total_iter or self.iter == self.max_outer_iter
 
         self.tsolve = cputime() - t    # Solve time
         self.shelf_handle.close()       # Close the data shelf
