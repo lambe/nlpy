@@ -427,9 +427,11 @@ class LSR1_new(object):
         if self.scaling:
             if abs(ys) >= 1e-15:
                 scaling_factor = ys/yy
-                scaling_criterion = np.linalg.norm(new_y - new_s / scaling_factor) >= 1e-10
+                # scaling_criterion = np.linalg.norm(new_y - new_s / scaling_factor) >= 1e-10
             else:
-                ys_criterion = False
+                # ys_criterion = False
+                scaling_factor = 1.0
+            scaling_criterion = np.linalg.norm(new_y - new_s / scaling_factor) >= 1.e-10
         else:
             if np.linalg.norm(new_y - new_s) < 1e-10:
                 yms_criterion = False
@@ -447,8 +449,10 @@ class LSR1_new(object):
             # end if
 
             # Recompute stored data for the matvec computation
-            if self.scaling:
+            if self.scaling and abs(self.ys_new) >= 1e-15:
                 self.gamma = self.ys_new / self.yy_new
+            else:
+                self.gamma = 1.0
 
             for i in xrange(self.stored_pairs):
                 self.a[i] = self.y[i] - self.s[i]/self.gamma
