@@ -1130,7 +1130,7 @@ class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianSplitQuasiNewton
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianSplitLbfgs
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianSplitQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
 
 
@@ -1139,7 +1139,7 @@ class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianSplitQuasiNewtonF
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianSplitLsr1
-        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+        AugmentedLagrangianSplitQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
 
@@ -1300,6 +1300,21 @@ class AugmentedLagrangianPartialLsr1TronFramework(AugmentedLagrangianQuasiNewton
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianPartialLsr1
         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+
+    def SetupInnerSolver(self, **kwargs):
+        return self.innerSolver(self.alprob, abstol=self.omega, x0=self.x, **kwargs)        
+
+
+
+class AugmentedLagrangianSplitLsr1TronFramework(AugmentedLagrangianSplitQuasiNewtonFramework):
+    """
+    Augmented Lagrangian algorithm using TRON as inner solver and L-SR1 Hessian approximation.
+    The approximation is only applied to the second-order terms of the Hessian.
+    """
+    def __init__(self, nlp, innerSolver, **kwargs):
+        prob_class = AugmentedLagrangianSplitLsr1
+        AugmentedLagrangianSplitQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
 
     def SetupInnerSolver(self, **kwargs):

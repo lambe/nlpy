@@ -100,6 +100,10 @@ class TronFramework:
         self.lg_old = None
         self.lg = None
 
+        self.save_ig = False
+        self.ig_old = None
+        self.ig = None
+
         self.tron = troninter(nlp.n)
 
         self.reltol  = kwargs.get('reltol', 1.0e-7)#self.nlp.stop_d)
@@ -181,6 +185,9 @@ class TronFramework:
         if self.save_lg:
             self.lg = self.nlp.dual_feasibility(self.x)
 
+        if self.save_ig:
+            self.ig = self.nlp.primal_feasibility(self.x)
+
         stoptol = max(self.abstol, self.reltol * self.gpnorm)
         exitUser = exitInner = False
         exitOptimal = self.gpnorm <= stoptol
@@ -219,6 +226,10 @@ class TronFramework:
                 if self.save_lg:
                     self.lg_old = self.lg.copy()
                     self.lg = self.nlp.dual_feasibility(self.x)
+
+                if self.save_ig:
+                    self.ig_old = self.ig.copy()
+                    self.ig = self.nlp.primal_feasibility(self.x)
 
             else:
                 # Calculate the number of CG iterations made in this inner iteration.
@@ -316,6 +327,29 @@ class TronPartialLqnFramework(TronFramework):
         s = self.x - self.x_old
         y = self.lg - self.lg_old
         self.nlp.hupdate(s, y)
+
+
+
+class TronSplitLqnFramework(TronFramework):
+    """
+    Limited-memory quasi-Newton approximation is split into two parts: one 
+    part estimates the Hessian of the Lagrangian while the other part 
+    estimates the Hessian of the infeasibility function 1/2 c(x)^T c(x)
+    """
+    def __init__(self, nlp, **kwargs):
+        TronFramework.__init__(self, nlp, **kwargs)
+        self.save_lg = True
+        self.save_ig = True
+
+
+    def PostIteration(self, **kwargs):
+        """
+        Update the quasi-Newton approximation.
+        """
+        s = self.x - self.x_old
+        y = self.lg - self.lg_old
+        yi = self.ig - self.ig_old
+        self.nlp.hupdate(s, y, yi)
 
 
 
