@@ -22,7 +22,7 @@ from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
 # from nlpy.model.nlp_mini import NLPModel_mini, SlackNLP_mini
 from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured, LBFGS_new
-from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new
+from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new, LBFGS_infeas
 from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
 from nlpy.optimize.solvers.lsr1 import LSR1_new, LSR1_structured_new
 from nlpy.optimize.solvers.fullqn_mpi import BFGS, SR1
@@ -310,6 +310,12 @@ class AugmentedLagrangianSplitQuasiNewton(AugmentedLagrangianQuasiNewton):
         return
 
 
+    def hreset(self, x):
+        self.Hessapp.restart()
+        self.Hessapp_feas.restart(x)
+        return
+
+
 
 class AugmentedLagrangianSplitLbfgs(AugmentedLagrangianSplitQuasiNewton):
     """
@@ -319,7 +325,9 @@ class AugmentedLagrangianSplitLbfgs(AugmentedLagrangianSplitQuasiNewton):
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LBFGS_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
-        self.Hessapp_feas = LBFGS_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',1), scaling=True, **kwargs)
+        # self.Hessapp_feas = LBFGS_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',1), scaling=True, **kwargs)
+        self.Hessapp_feas = LBFGS_infeas(self.nlp.n, self.x0, self.nlp.jprod, self.nlp.jtprod, 
+            npairs=kwargs.get('feas_qn_pairs',5), slack_index=self.nlp.original_n, scaling=False, **kwargs)
 
 
 
@@ -331,7 +339,9 @@ class AugmentedLagrangianSplitLsr1(AugmentedLagrangianSplitQuasiNewton):
     def __init__(self, nlp, **kwargs):
         AugmentedLagrangianSplitQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',min(3,self.n)), scaling=True, **kwargs)
-        self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        # self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
+        self.Hessapp_feas = LBFGS_infeas(self.nlp.n, self.x0, self.nlp.jprod, self.nlp.jtprod, 
+            npairs=kwargs.get('feas_qn_pairs',5), slack_index=self.nlp.original_n, scaling=True, **kwargs)
 
 
 
@@ -1101,7 +1111,22 @@ class AugmentedLagrangianPartialLsr1Framework(AugmentedLagrangianQuasiNewtonFram
 
 
 
-class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianSplitQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)
+
+
+    def PostIteration(self, **kwargs):
+        """
+        This method resets the Quasi Newton Hessian approximation.
+        """
+        self.alprob.hreset(self.x)
+        return
+
+
+
+class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianSplitQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianSplitLbfgs
@@ -1110,7 +1135,7 @@ class AugmentedLagrangianSplitLbfgsFramework(AugmentedLagrangianQuasiNewtonFrame
 
 
 
-class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianSplitQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         prob_class = AugmentedLagrangianSplitLsr1
@@ -1120,7 +1145,7 @@ class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianQuasiNewtonFramew
 
 
 
-class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianQuasiNewtonFramework):
+class AugmentedLagrangianTotalQuasiNewtonFramework(AugmentedLagrangianSplitQuasiNewtonFramework):
 
     def __init__(self, nlp, innerSolver, **kwargs):
         AugmentedLagrangianQuasiNewtonFramework.__init__(self, nlp, innerSolver, **kwargs)

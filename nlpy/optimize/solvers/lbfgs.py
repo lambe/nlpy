@@ -411,6 +411,9 @@ class LBFGS_new(object):
         self.n = n
         self.npairs = npairs
 
+        # An initialization for the main diagonal, not used in the base class
+        self.diag = numpy.ones(n)
+
         # Optional arguments
         self.scaling = kwargs.get('scaling', False)
 
@@ -459,7 +462,7 @@ class LBFGS_new(object):
             # Recompute stored data for the matvec computation
             for i in xrange(self.stored_pairs):
                 self.b[i] = numpy.dot(self.y[i],self.s[i])**(-0.5) * self.y[i]
-                self.a[i] = self.s[i]/self.gamma
+                self.a[i] = self.s[i]*self.diag/self.gamma
                 for j in xrange(i):
                     bTs = numpy.dot(self.b[j],self.s[i])
                     aTs = numpy.dot(self.a[j],self.s[i])
@@ -476,6 +479,7 @@ class LBFGS_new(object):
         Restart the approximation by clearing all data on past updates.
         """
         self.gamma = 1.0
+        self.diag = numpy.ones(self.n)
         self.s = []
         self.y = []
         self.a = [None]*self.npairs
@@ -492,7 +496,7 @@ class LBFGS_new(object):
         """
         self.numMatVecs += 1
 
-        w = v / self.gamma
+        w = v * self.diag / self.gamma
         for i in xrange(self.stored_pairs):
             w += numpy.dot(self.b[i],v)*self.b[i] - numpy.dot(self.a[i],v)*self.a[i]
         # end for
@@ -540,17 +544,17 @@ class LBFGS_structured_new(LBFGS_new):
                 self.a[i] = self.s[i]/self.gamma
                 self.ad[i] = self.yd[i] - self.s[i]/self.gamma
                 for j in xrange(i):
-                    aTs_temp = np.dot(self.a[j],self.s[i])
-                    adTs_temp = np.dot(self.ad[j],self.s[i])
+                    aTs_temp = numpy.dot(self.a[j],self.s[i])
+                    adTs_temp = numpy.dot(self.ad[j],self.s[i])
                     Delta_s = (aTs_temp/self.aTs[j])*self.ad[j] + (adTs_temp/self.aTs[j])*self.a[j]
                     Delta_s -= (aTs_temp*self.adTs[j]/self.aTs[j]**2)*self.a[j]
                     self.a[i] += Delta_s
                     self.ad[i] -= Delta_s
                 # end for
-                coeff = (np.dot(self.y[i],self.s[i])/np.dot(self.s[i],self.a[i]))**0.5
+                coeff = (numpy.dot(self.y[i],self.s[i])/numpy.dot(self.s[i],self.a[i]))**0.5
                 self.a[i] = self.y[i] + coeff*self.a[i]
-                self.aTs[i] = np.dot(self.a[i], self.s[i])
-                self.adTs[i] = np.dot(self.ad[i], self.s[i])
+                self.aTs[i] = numpy.dot(self.a[i], self.s[i])
+                self.adTs[i] = numpy.dot(self.ad[i], self.s[i])
             # end for
         else:
             self.log.debug('Not accepting LBFGS update: ys=%g' % ys)
@@ -578,12 +582,81 @@ class LBFGS_structured_new(LBFGS_new):
 
         w = v / self.gamma
         for i in xrange(self.stored_pairs):
-            aTv = np.dot(self.a[i],v)
-            adTv = np.dot(self.ad[i],v)
+            aTv = numpy.dot(self.a[i],v)
+            adTv = numpy.dot(self.ad[i],v)
             w += (aTv/self.aTs[i])*self.ad[i] + (adTv/self.aTs[i])*self.a[i]
             w -= (aTv*self.adTs[i]/self.aTs[i]**2)*self.a[i]
         # end for
         return w
+
+
+
+class LBFGS_infeas(LBFGS_new):
+    """
+    This is a specialized LBFGS approximation for the infeasibility term of 
+    an augmented Lagrangian function. The class contains specialized methods 
+    for defining an initial diagonal.
+    """
+
+    def __init__(self, n, x, jprod, jtprod, npairs=5, **kwargs):
+        LBFGS_new.__init__(self, n, npairs, **kwargs)
+        self.slack_index = kwargs.get('slack_index',n)
+        self.jprod = jprod
+        self.jtprod = jtprod
+        self.x = x  # Point at which to compute diagonal
+        # self.compute_diag()
+        self.diag_eps = 1e-6
+        self.beta = kwargs.get('beta',3)
+        self.compute_diag()
+
+
+    def restart(self, x):
+        """
+        Restart the approximation.
+        """
+        LBFGS_new.restart(self)
+        self.x = x
+        self.compute_diag()
+        return
+
+
+    def compute_diag(self):
+        """
+        Compute an estimate of the initial diagonal to seed this approximation.
+
+        The initial diagonal comes from estimating the diagonal elements of 
+        J'J, where J is the Jacobian of constraints with respect to decision 
+        variables. The diagonal elements corresponding to slack variables 
+        remain as an identity block.
+        """
+        # Safety check that product functions are defined
+        if self.jprod == None or self.jtprod == None:
+            return
+
+        # Simple version - assume underlying matrix is diagonal
+        # ones_vec = numpy.ones(self.n)
+        # Jv = self.jprod(self.x, ones_vec)
+        # JTJv = self.jtprod(self.x, Jv)
+        # n_dense = self.slack_index
+        # self.diag[:n_dense] = JTJv[:n_dense]
+        # for i in xrange(n_dense):
+        #     if self.diag[i] < self.diag_eps:
+        #         self.diag[i] = max(abs(self.diag[i]),self.diag_eps)
+
+        # More complicated schemes extract the main diagonal from a banded approximation
+        for i in xrange(self.beta):
+            # ind_set = numpy.arange(i,self.n,self.beta)
+            range_arr = numpy.arange(self.n)
+            binary_arr = numpy.where(range_arr % self.beta == i, 1, 0)
+            Jv = self.jprod(self.x, binary_arr)
+            JTJv = self.jtprod(self.x, Jv)
+            for j in xrange(i,self.slack_index,self.beta):
+                # if JTJv[j] < self.diag_eps:
+                self.diag[j] = max(abs(JTJv[j]),self.diag_eps)
+                # else:
+
+
+        return
 
 
 

@@ -644,3 +644,140 @@ class TR1B(NonsquareQuasiNewton):
             self.A_part += np.outer(Js[lo_ind:hi_ind] - As[lo_ind:hi_ind], JTsigma - ATsigma) / denom
         return
             
+
+
+class LMadjointBroydenA(object):
+    """
+    This class provides a limited-memory implementation of the adjoint Broyden 
+    A update. Because this class requires only a small amount of memory, no 
+    MPI constructs are needed to evaluate matrix-vector products.
+
+    ** not yet implemented **
+    """
+
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+        """
+        Arguments:
+        m = Number of rows of approximation matrix
+        n = Number of columns of approximation matrix
+        x = the current point; used to track function changes
+        vecfunc = A function that computes the required vector function 
+            values at x
+        jprod = A function that computes the true product of the original 
+            Jacobian with a vector
+        jtprod = A function that computes the true product of the original 
+            transpose Jacobian with a vector
+        (access to both jprod and jtprod are critical to computing the initial
+            matrix and the update)
+
+        Optional arguments:
+        slack_index = Index of the first slack variable; the slack variable 
+            Jacobian is known exactly, so this part should never be updated.
+        """
+
+        # Mandatory Arguments
+        self.m = m
+        self.n = n
+        self.jprod = jprod
+        self.jtprod = jtprod
+        self.vecfunc = vecfunc
+        self.x = x              # Keep track of the current point for matvecs
+
+        # Indices to handle sparse parts of the full Jacobian directly
+        self.slack_index = kwargs.get('slack_index',n)
+        self.sparse_index = kwargs.get('sparse_index',m)
+        self.m_dense = self.sparse_index
+        self.n_dense = self.slack_index
+
+        # Initial function values (uninitialized at start)
+        self._vecfunc = np.zeros(m)
+
+        # Threshold on dot product s's to accept an update of the matrix.
+        self.accept_threshold = 1.0e-20
+
+        # Keep track of number of matrix-vector products.
+        self.numMatVecs = 0
+        self.numRMatVecs = 0
+
+        # Storage space for vector pairs in the limited-memory approach
+        self.sigma = []
+        self.sigma_bar = []
+        self.q = []
+
+        return
+
+
+    def store(self, new_x, new_s, **kwargs):
+        """
+        Store the update given the primal search direction new_s and the new 
+        point new_x. This prototype is overwritten in subsequent types of 
+        updates.
+        """
+        # To Do
+        pass
+
+
+    def restart(self, x):
+        """
+        Restart the approximation by clear all data on past updates.
+        """
+        self.x = x
+        self._vecfunc = self.vecfunc(self.x)
+
+        # Loop over matrix-vector products and assemble a sparse matrix
+
+        # Clear the set of additional stored vectors in the low-rank modification
+
+        return
+
+
+    def dense_matvec(self, v):
+        """
+        Compute the matrix-vector product with the dense block approximation.
+        """
+        w = self.A_sparse*v
+        for i in xrange(self.stored_pairs):
+            w += self.sigma[i]*np.dot(self.sigma_bar[i],v) - self.sigma[i]*np.dot(self.sigma[i],w)
+        # end for 
+        return w 
+
+
+    def dense_rmatvec(self, w):
+        """
+        Compute the transpose matrix-vector product with the dense block 
+        approximation.
+        """
+        v = self.A_sparse.T*w 
+        for i in xrange(self.stored_pairs):
+            k = np.dot(self.sigma[i],w)
+            v += self.sigma_bar[i]*np.dot(self.sigma[i],w) - k*self.q[i]
+        # end for 
+        return v
+
+
+    def matvec(self, v):
+        """
+        Compute a matrix-vector product between the current approximation and 
+        the vector v. This function uses the numpy.dot() function, which is 
+        very fast for small- and medium-sized dense matrices.
+        """
+        self.numMatVecs += 1
+        w = self.jprod(self.x, v, sparse_only=True)
+        # w[:self.m_dense] += np.dot(self.A,v[:self.n_dense])
+        w[:self.m_dense] += self.dense_matvec(v[:self.n_dense])
+        return w
+
+
+    def rmatvec(self, w):
+        """
+        Compute a transpose matrix-vector product between the current 
+        approximation and the vector w. 
+        """
+        self.numRMatVecs += 1
+        v = self.jtprod(self.x, w, sparse_only=True)
+        # A dot-product shortcut provided w stays a vector
+        # v[:self.n_dense] += np.dot(w[:self.m_dense],self.A)
+        v[:self.n_dense] += self.dense_rmatvec(w[:self.m_dense])
+        return v
+
+
