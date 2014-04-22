@@ -22,9 +22,9 @@ from nlpy.model.nlp import NLPModel
 from nlpy.model.mfnlp import SlackNLP
 # from nlpy.model.nlp_mini import NLPModel_mini, SlackNLP_mini
 from nlpy.optimize.solvers.lbfgs import LBFGS, LBFGS_structured, LBFGS_new
-from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new, LBFGS_infeas
+from nlpy.optimize.solvers.lbfgs import LBFGS_structured_new, LBFGS_infeas#, LBFGS_infeas2
 from nlpy.optimize.solvers.lsr1 import LSR1, LSR1_unrolling, LSR1_structured
-from nlpy.optimize.solvers.lsr1 import LSR1_new, LSR1_structured_new
+from nlpy.optimize.solvers.lsr1 import LSR1_new, LSR1_structured_new, LSR1_infeas
 from nlpy.optimize.solvers.fullqn_mpi import BFGS, SR1
 from nlpy.optimize.solvers.lsqr import LSQRFramework
 from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
@@ -306,13 +306,17 @@ class AugmentedLagrangianSplitQuasiNewton(AugmentedLagrangianQuasiNewton):
         if new_s is not None and new_y is not None:
             self.Hessapp.store(new_s[:on],new_y[:on])
         if new_s is not None and new_yi is not None:
+            # J = self.nlp.jac(new_x)
+            # new_z = J.T * (J * new_s)
             self.Hessapp_feas.store(new_s,new_yi)
+            # self.Hessapp_feas.store(new_s[:on],new_yi[:on])
         return
 
 
     def hreset(self, x):
         self.Hessapp.restart()
         self.Hessapp_feas.restart(x)
+        # self.Hessapp_feas.restart()
         return
 
 
@@ -327,7 +331,8 @@ class AugmentedLagrangianSplitLbfgs(AugmentedLagrangianSplitQuasiNewton):
         self.Hessapp = LBFGS_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         # self.Hessapp_feas = LBFGS_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',1), scaling=True, **kwargs)
         self.Hessapp_feas = LBFGS_infeas(self.nlp.n, self.x0, self.nlp.jprod, self.nlp.jtprod, 
-            npairs=kwargs.get('feas_qn_pairs',5), slack_index=self.nlp.original_n, scaling=False, **kwargs)
+            npairs=kwargs.get('feas_qn_pairs',5), slack_index=self.nlp.original_n, scaling=True, **kwargs)
+        # self.Hessapp_feas = LBFGS_infeas2(self.nlp.original_n, npairs=kwargs.get('feas_qn_pairs',5), scaling=True, big_n=self.nlp.n, **kwargs)
 
 
 
@@ -342,6 +347,7 @@ class AugmentedLagrangianSplitLsr1(AugmentedLagrangianSplitQuasiNewton):
         # self.Hessapp_feas = LSR1_new(self.nlp.n, npairs=kwargs.get('feas_qn_pairs',min(3,self.n)), scaling=True, **kwargs)
         self.Hessapp_feas = LBFGS_infeas(self.nlp.n, self.x0, self.nlp.jprod, self.nlp.jtprod, 
             npairs=kwargs.get('feas_qn_pairs',5), slack_index=self.nlp.original_n, scaling=True, **kwargs)
+        # self.Hessapp_feas = LBFGS_infeas2(self.nlp.original_n, npairs=kwargs.get('feas_qn_pairs',5), scaling=True, big_n=self.nlp.n, **kwargs)
 
 
 

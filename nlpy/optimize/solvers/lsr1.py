@@ -383,6 +383,9 @@ class LSR1_new(object):
         self.n = n
         self.npairs = npairs
 
+        # An initialization for the main diagonal, not used in the base class
+        self.diag = numpy.ones(n)
+
         # Optional arguments
         self.scaling = kwargs.get('scaling', False)
 
@@ -455,7 +458,7 @@ class LSR1_new(object):
                 self.gamma = 1.0
 
             for i in xrange(self.stored_pairs):
-                self.a[i] = self.y[i] - self.s[i]/self.gamma
+                self.a[i] = self.y[i] - self.s[i]*self.diag/self.gamma
                 for j in xrange(i):
                     self.a[i] -= np.dot(self.a[j], self.s[i])/self.aTs[j] * self.a[j]
                 self.aTs[i] = np.dot(self.a[i], self.s[i])
@@ -486,7 +489,7 @@ class LSR1_new(object):
         """
         self.numMatVecs += 1
 
-        w = v / self.gamma
+        w = v * self.diag / self.gamma
         for i in xrange(self.stored_pairs):
             w += np.dot(self.a[i],v)/self.aTs[i] * self.a[i]
         # end for
@@ -591,3 +594,73 @@ class LSR1_structured_new(LSR1_new):
             w -= (aTv*self.adTs[i]/self.aTs[i]**2)*self.a[i]
         # end for
         return w
+
+
+
+class LSR1_infeas(LSR1_new):
+    """
+    This is a specialized LSR1 approximation for the infeasibility term of 
+    an augmented Lagrangian function. The class contains specialized methods 
+    for defining an initial diagonal.
+    """
+
+    def __init__(self, n, x, jprod, jtprod, npairs=5, **kwargs):
+        LSR1_new.__init__(self, n, npairs, **kwargs)
+        self.slack_index = kwargs.get('slack_index',n)
+        self.jprod = jprod
+        self.jtprod = jtprod
+        self.x = x  # Point at which to compute diagonal
+        # self.compute_diag()
+        self.diag_eps = 1e-6
+        self.beta = kwargs.get('beta',min(self.slack_index,3))
+        self.compute_diag()
+
+
+    def restart(self, x):
+        """
+        Restart the approximation.
+        """
+        LSR1_new.restart(self)
+        self.x = x
+        self.compute_diag()
+        return
+
+
+    def compute_diag(self):
+        """
+        Compute an estimate of the initial diagonal to seed this approximation.
+
+        The initial diagonal comes from estimating the diagonal elements of 
+        J'J, where J is the Jacobian of constraints with respect to decision 
+        variables. The diagonal elements corresponding to slack variables 
+        remain as an identity block.
+        """
+        # Safety check that product functions are defined
+        if self.jprod == None or self.jtprod == None:
+            return
+
+        # Simple version - assume underlying matrix is diagonal
+        # ones_vec = numpy.ones(self.n)
+        # Jv = self.jprod(self.x, ones_vec)
+        # JTJv = self.jtprod(self.x, Jv)
+        # n_dense = self.slack_index
+        # self.diag[:n_dense] = JTJv[:n_dense]
+        # for i in xrange(n_dense):
+        #     if self.diag[i] < self.diag_eps:
+        #         self.diag[i] = max(abs(self.diag[i]),self.diag_eps)
+
+        # More complicated schemes extract the main diagonal from a banded approximation
+        for i in xrange(self.beta):
+            # ind_set = numpy.arange(i,self.n,self.beta)
+            range_arr = numpy.arange(self.n)
+            binary_arr = numpy.where(range_arr % self.beta == i, 1, 0)
+            binary_arr[self.slack_index:] *= 0.
+            Jv = self.jprod(self.x, binary_arr)
+            JTJv = self.jtprod(self.x, Jv)
+            for j in xrange(i,self.slack_index,self.beta):
+                # if JTJv[j] < self.diag_eps:
+                self.diag[j] = max(abs(JTJv[j]),self.diag_eps)
+                # else:
+
+
+        return

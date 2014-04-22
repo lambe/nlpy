@@ -5,6 +5,8 @@ import numpy
 import numpy.linalg
 import logging
 
+# import pdb
+
 # imported packages just for testing few things:
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.optimize.solvers.lsr1 import LSR1, InverseLSR1
@@ -606,7 +608,7 @@ class LBFGS_infeas(LBFGS_new):
         self.x = x  # Point at which to compute diagonal
         # self.compute_diag()
         self.diag_eps = 1e-6
-        self.beta = kwargs.get('beta',3)
+        self.beta = kwargs.get('beta',min(self.slack_index,3))
         self.compute_diag()
 
 
@@ -648,6 +650,7 @@ class LBFGS_infeas(LBFGS_new):
             # ind_set = numpy.arange(i,self.n,self.beta)
             range_arr = numpy.arange(self.n)
             binary_arr = numpy.where(range_arr % self.beta == i, 1, 0)
+            binary_arr[self.slack_index:] *= 0.
             Jv = self.jprod(self.x, binary_arr)
             JTJv = self.jtprod(self.x, Jv)
             for j in xrange(i,self.slack_index,self.beta):
@@ -657,6 +660,72 @@ class LBFGS_infeas(LBFGS_new):
 
 
         return
+
+
+    # An alternative to storing infeasibility gradients
+    # def store(self, new_s, new_yi, new_x):
+    #     """
+    #     Alternative storage scheme: pass J'Js in as the y-vector of the quasi-
+    #     Newton update.
+    #     """
+    #     self.x = new_x
+    #     Js = self.jprod(self.x, new_s)
+    #     JTJs = self.jtprod(self.x, Js)
+    #     LBFGS_new.store(self, new_s, JTJs)
+    #     return
+
+
+    # This matvec function seems to do poorly...
+    # def matvec(self, v):
+    #     """
+    #     This matvec function is more complicated than that of the base class
+    #     to preserve the identity block from the slack variables.
+    #     """
+    #     self.numMatVecs += 1
+
+    #     w = v * self.diag / self.gamma
+    #     for i in xrange(self.stored_pairs):
+    #         # w += numpy.dot(self.b[i],v)*self.b[i] - numpy.dot(self.a[i],v)*self.a[i]
+    #         w += numpy.dot(self.b[i][:self.slack_index],v[:self.slack_index])*self.b[i] - \
+    #             numpy.dot(self.a[i][:self.slack_index],v[:self.slack_index])*self.a[i]
+    #         w[:self.slack_index] += numpy.dot(self.b[i][self.slack_index:],v[self.slack_index:])*self.b[i][:self.slack_index] - \
+    #             numpy.dot(self.a[i][self.slack_index:],v[self.slack_index:])*self.a[i][:self.slack_index]
+    #     # end for
+    #     return w
+
+
+
+class LBFGS_infeas2(LBFGS_new):
+    """
+    This is a container class for an LBFGS method within a larger matrix.
+    The idea is to approximate the infeasibility Hessian by an LBFGS matrix 
+    for the second derivatives with respect to x, by an identity matrix for 
+    the second derivatives with respect to the slacks, and by zero for the 
+    cross-derivative terms.
+    """
+
+    def __init__(self, n, npairs=5, **kwargs):
+        # pdb.set_trace()
+        LBFGS_new.__init__(self, n, npairs, **kwargs)
+        # Note that the update vectors must be of length n, not length big_n
+        self.big_n = kwargs.get('big_n',n)
+
+
+    def matvec(self,v):
+        """
+        Compute a matrix-vector product between the current limited-memory
+        approximation to the Hessian matrix and the vector v using
+        the unrolling formula.
+        """
+        self.numMatVecs += 1
+
+        w = v / self.gamma
+        w[self.n:] = v[self.n:]
+        for i in xrange(self.stored_pairs):
+            w[:self.n] += numpy.dot(self.b[i],v[:self.n])*self.b[i] - \
+                numpy.dot(self.a[i],v[:self.n])*self.a[i]
+        # end for
+        return w
 
 
 
