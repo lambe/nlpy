@@ -1147,7 +1147,7 @@ class AugmentedLagrangianSplitLsr1Framework(AugmentedLagrangianSplitQuasiNewtonF
         prob_class = AugmentedLagrangianSplitLsr1
         AugmentedLagrangianSplitQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
-        self.update_on_rejected_step = True
+        self.update_on_rejected_step = False
 
 
 

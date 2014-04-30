@@ -650,7 +650,7 @@ class LBFGS_infeas(LBFGS_new):
             # ind_set = numpy.arange(i,self.n,self.beta)
             range_arr = numpy.arange(self.n)
             binary_arr = numpy.where(range_arr % self.beta == i, 1, 0)
-            binary_arr[self.slack_index:] *= 0.
+            binary_arr[self.slack_index:] = 0.
             Jv = self.jprod(self.x, binary_arr)
             JTJv = self.jtprod(self.x, Jv)
             for j in xrange(i,self.slack_index,self.beta):
