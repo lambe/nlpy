@@ -260,7 +260,7 @@ class NonsquareQuasiNewton:
                     self.shelf_handle['J_approx_%d'%(i)] = A_block
                     self.shelf_handle.sync()
             else:
-                self.comm.Send(self.A_part, dest=0, tag=nprocs+i)
+                self.comm.Send(self.A_part, dest=0, tag=nprocs+self.rank)
         return
 
 

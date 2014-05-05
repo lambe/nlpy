@@ -605,7 +605,8 @@ class AugmentedLagrangianFramework(object):
         self.warmstart = kwargs.get('warmstart',False)
         self.data_prefix = kwargs.get('data_prefix','./')
         self.save_data = kwargs.get('save_data',True)
-        self.shelf_fname = self.data_prefix+'auglag_data.shv'
+        self.data_file = kwargs.get('data_file','auglag_data.shv')
+        self.shelf_fname = self.data_prefix+self.data_file
         self.shelf_handle = shelve.open(self.shelf_fname,'c',writeback=True)
 
         self.comm = MPI.COMM_WORLD
@@ -628,9 +629,9 @@ class AugmentedLagrangianFramework(object):
 
             # Now start the problem on all processors
             self.alprob = self.alprob_class(nlp,rho_init=rho_start,
-                pi0=pi_start, **kwargs)
+                pi0=pi_start, shelf_handle=self.shelf_handle, **kwargs)
         else:
-            self.alprob = self.alprob_class(nlp,**kwargs)
+            self.alprob = self.alprob_class(nlp, shelf_handle=self.shelf_handle, **kwargs)
             self.x = kwargs.get('x0', self.alprob.x0.copy())
         # end if
 
