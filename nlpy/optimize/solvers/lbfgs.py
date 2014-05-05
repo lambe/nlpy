@@ -600,7 +600,7 @@ class LBFGS_infeas(LBFGS_new):
     for defining an initial diagonal.
     """
 
-    def __init__(self, n, x, jprod, jtprod, npairs=5, **kwargs):
+    def __init__(self, n, x, vecfunc, jprod, jtprod, npairs=5, **kwargs):
         LBFGS_new.__init__(self, n, npairs, **kwargs)
         self.slack_index = kwargs.get('slack_index',n)
         self.jprod = jprod
@@ -609,6 +609,7 @@ class LBFGS_infeas(LBFGS_new):
         # self.compute_diag()
         self.diag_eps = 1e-6
         self.beta = kwargs.get('beta',min(self.slack_index,3))
+        dummy = vecfunc(self.x) # A call to the constraint function to set up the jprod internals
         self.compute_diag()
 
 
