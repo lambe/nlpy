@@ -607,7 +607,10 @@ class AugmentedLagrangianFramework(object):
         self.save_data = kwargs.get('save_data',True)
         self.data_file = kwargs.get('data_file','auglag_data.shv')
         self.shelf_fname = self.data_prefix+self.data_file
-        self.shelf_handle = shelve.open(self.shelf_fname,'c',writeback=True)
+        if self.save_data:
+            self.shelf_handle = shelve.open(self.shelf_fname,'c',writeback=True)
+        else:
+            self.shelf_handle = None
 
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
@@ -1041,7 +1044,8 @@ class AugmentedLagrangianFramework(object):
             exitIter = self.niter_total > self.max_total_iter or self.iter == self.max_outer_iter
 
         self.tsolve = cputime() - t    # Solve time
-        self.shelf_handle.close()       # Close the data shelf
+        if self.shelf_handle != None:
+            self.shelf_handle.close()       # Close the data shelf
 
         if self.alprob.nlp.m != 0:
             self.pi_max = np.max(np.abs(self.alprob.pi))
