@@ -616,6 +616,9 @@ class AugmentedLagrangianFramework(object):
         self.rank = self.comm.Get_rank()
 
         if self.warmstart and self.shelf_handle != None:
+            # Pop the arguments from kwargs to prevent an error
+            rho_start = kwargs.pop('rho_init',None)
+
             # Have one processor retrieve the relevant data for the problem
             if self.rank == 0:
                 rho_start = self.shelf_handle['rho']
