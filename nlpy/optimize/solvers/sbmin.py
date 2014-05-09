@@ -237,7 +237,7 @@ class SBMINFramework(object):
         # Reset initial trust-region radius.
         self.TR.Delta = np.maximum(0.1 * self.pgnorm, .2)
         if self.warmstart:
-            if self.rank == 0 and shelf_handle != None:
+            if self.rank == 0 and self.shelf_handle != None:
                 self.TR.Delta = self.shelf_handle['tr_Delta']
             else:
                 self.TR.Delta = None
