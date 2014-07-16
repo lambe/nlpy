@@ -132,22 +132,16 @@ class NonsquareQuasiNewton:
             self.A_part = np.zeros([self.sizes[self.rank], self.n_dense])
             if self.m_dense < self.n_dense:
                 unitvec = np.zeros(self.m)
-                # for k in range(self.m_dense):
-                #     unitvec[k-1] = 0.
-                #     unitvec[k] = 1.
-                #     full_prod = self.jtprod(self.x, unitvec)
-                #     self.A[k,:] = full_prod[:self.n_dense]
                 lo_ind = self.inds[self.rank]
                 hi_ind = self.inds[self.rank] + self.sizes[self.rank]
-                if lo_ind == hi_ind:
-                    # A dummy product to prevent MPI bugs
-                    dummy = self.jtprod(self.x, unitvec)
-                else:
-                    for k in range(lo_ind, hi_ind):
-                        unitvec[k-1] = 0.
-                        unitvec[k] = 1.
-                        full_prod = self.jtprod(self.x, unitvec)
-                        self.A_part[k-lo_ind,:] = full_prod[:self.n_dense]
+                # This code assumes that MPI is used to form the matvecs
+                for k in range(self.m_dense):
+                    unitvec[k-1] = 0.
+                    unitvec[k] = 1.
+                    full_prod = self.jtprod(self.x, unitvec)
+                    if k >= lo_ind and k < hi_ind:
+                        # Put the product vector in the right place
+                        self.A_part[k-lo_ind,:] = full_prod[:self.n_dense]                    
             else:
                 unitvec = np.zeros(self.n)
                 lo_ind = self.inds[self.rank]
