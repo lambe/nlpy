@@ -31,6 +31,7 @@ from nlpy.optimize.solvers.nonsquareqn import Broyden, modBroyden
 from nlpy.optimize.solvers.nonsquareqn import adjointBroydenA, adjointBroydenB
 from nlpy.optimize.solvers.nonsquareqn import directBroydenA, mixedBroyden
 from nlpy.optimize.solvers.nonsquareqn import TR1B
+from nlpy.optimize.solvers.nonsquareqn import LMadjointBroydenB
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.krylov.linop import ReducedLinearOperator
 from nlpy.optimize.tr.trustregion import TrustRegionFramework as TR
@@ -453,6 +454,20 @@ class AugmentedLagrangianTotalLsr1AdjBroyB(AugmentedLagrangianTotalQuasiNewton):
         AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
         self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
         self.Jacapp = adjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
+            self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
+        self.Jacapp.restart(self.x0)
+
+
+
+class AugmentedLagrangianTotalLsr1LAdjBroyB(AugmentedLagrangianTotalQuasiNewton):
+    """
+    Use an LSR1 approximation for the Hessian and adjoint Broyden 
+    approximation B for the Jacobian.
+    """
+    def __init__(self, nlp, **kwargs):
+        AugmentedLagrangianTotalQuasiNewton.__init__(self, nlp, **kwargs)
+        self.Hessapp = LSR1_new(self.nlp.original_n, npairs=kwargs.get('qn_pairs',1), scaling=True, **kwargs)
+        self.Jacapp = LMadjointBroydenB(self.nlp.m, self.n, self.x0, self.nlp.cons, 
             self.nlp.jprod, self.nlp.jtprod, slack_index=self.nlp.original_n, **kwargs)
         self.Jacapp.restart(self.x0)
 
@@ -1210,6 +1225,25 @@ class AugmentedLagrangianTotalLsr1AdjBroyBFramework(AugmentedLagrangianTotalQuas
         AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
             alprob_class=prob_class, **kwargs)
         self.update_on_rejected_step = True
+
+
+
+class AugmentedLagrangianTotalLsr1LAdjBroyBFramework(AugmentedLagrangianTotalQuasiNewtonFramework):
+
+    def __init__(self, nlp, innerSolver, **kwargs):
+        prob_class = AugmentedLagrangianTotalLsr1LAdjBroyB
+        AugmentedLagrangianTotalQuasiNewtonFramework.__init__(self, nlp, innerSolver, 
+            alprob_class=prob_class, **kwargs)
+        self.update_on_rejected_step = True
+
+
+    def PostIteration(self, **kwargs):
+        """
+        This method resets *both* Quasi-Newton approximations on request.
+        """
+        self.alprob.hreset()
+        self.alprob.jreset(self.x)
+        return
 
 
 
