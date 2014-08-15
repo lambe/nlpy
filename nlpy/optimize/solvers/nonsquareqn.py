@@ -737,7 +737,7 @@ class LMadjointBroydenB(object):
             mu = full_prod[:slack] - sparse_prod[:slack]
 
             # Attach sigma and mu to the lists of stored vectors
-            self.sigma.append(sigma.copy())
+            self.sigma.append(sigma_unit.copy())
             self.mu.append(mu.copy())
             if len(self.sigma) > self.npairs:
                 del self.sigma[0]
