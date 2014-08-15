@@ -650,7 +650,7 @@ class LMadjointBroydenB(object):
     ** not yet implemented **
     """
 
-    def __init__(self, m, n, x, vecfunc, jprod, jtprod, npairs=5, **kwargs):
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, npairs=10, **kwargs):
         """
         Arguments:
         m = Number of rows of approximation matrix
@@ -718,14 +718,22 @@ class LMadjointBroydenB(object):
         sparse = self.sparse_index
 
         As = self.dense_matvec(new_s[:slack])
-        vecfunc_new = self.vecfunc(new_x)
-        new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
-        self._vecfunc = vecfunc_new
+        # Version B
+        # vecfunc_new = self.vecfunc(new_x)
+        # new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
+        # self._vecfunc = vecfunc_new
+        # sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        # new_y -= sparse_prod[:sparse]
+        # Version A
+        full_prod = self.jprod(self.x, new_s)
         sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
-        new_y -= sparse_prod[:sparse]
+        Js = full_prod[:sparse] - sparse_prod[:sparse]
 
         # Note that sigmas are stored as unit vectors to improve accuracy
-        sigma = new_y - As
+        # This line is version B
+        # sigma = new_y - As
+        # This line is version A
+        sigma = Js - As
         sigma2 = numpy.dot(sigma, sigma)
         if sigma2 > self.accept_threshold:
             sigma_len = sigma2**0.5
@@ -757,19 +765,38 @@ class LMadjointBroydenB(object):
         self.x = x
         self._vecfunc = self.vecfunc(self.x)
 
+        # Initial condition based on TR1:
         # General strategy, start with an identity block and add a TR1 update
         # to product the correct matvecs with vectors of ones
         # (similar to the scaling strategy for square quasi-Newton methods)
-        ones_n = np.ones(self.n)
-        ones_n[self.n_dense:] = 0.
-        ones_m = np.ones(self.m)
-        ones_m[self.m_dense:] = 0.
+        # ones_n = np.ones(self.n)
+        # ones_n[self.n_dense:] = 0.
+        # ones_m = np.ones(self.m)
+        # ones_m[self.m_dense:] = 0.
 
-        full_for_prod = self.jprod(self.x, ones_n)
-        full_adj_prod = self.jtprod(self.x, ones_m)
+        # full_for_prod = self.jprod(self.x, ones_n)
+        # full_adj_prod = self.jtprod(self.x, ones_m)
 
-        self.sigma_bar = full_for_prod[:self.m_dense] - 1.0
-        self.mu_bar = full_adj_prod[:self.n_dense] - 1.0
+        # self.sigma_bar = full_for_prod[:self.m_dense] - 1.0
+        # self.mu_bar = full_adj_prod[:self.n_dense] - 1.0
+
+        # Initial condition based on adjoint Broyden C
+        vecfunc_len = numpy.dot(self._vecfunc,self._vecfunc)**0.5
+        if vecfunc_len > self.accept_threshold:
+            self.sigma_bar = self._vecfunc[:self.m_dense]/vecfunc_len
+        else:
+            # Assume all constraints are the same value to get a nonzero 
+            # direction vector
+            self.sigma_bar = np.ones(self.m_dense) / self.m_dense**0.5
+        sigma_long = np.zeros(self.m)
+        sigma_long[:self.m_dense] = self.sigma_bar
+        full_prod = self.jtprod(self.x, sigma_long)
+        sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+        self.mu_bar = full_prod[:self.n_dense] - sparse_prod[:self.n_dense]
+        # Correct for initial estimate of identity block
+        mu_long = np.zeros(self.n_dense)
+        mu_long[:self.min_dim] = self.sigma_bar[:self.min_dim]
+        self.mu_bar -= mu_long
 
         # Clear the set of additional stored vectors in the low-rank modification
         self.sigma = []
@@ -784,8 +811,10 @@ class LMadjointBroydenB(object):
         """
         # pdb.set_trace()
         identity_term = np.zeros(self.m_dense) + v[:self.min_dim]
-        TR1_corr = (np.dot(v, self.mu_bar)/self.mu_bar.sum())*self.sigma_bar
-        w = identity_term + TR1_corr
+        # TR1_corr = (np.dot(v, self.mu_bar)/self.mu_bar.sum())*self.sigma_bar
+        # w = identity_term + TR1_corr
+        ABC_corr = np.dot(self.mu_bar,v)*self.sigma_bar
+        w = identity_term + ABC_corr
         for i in xrange(self.stored_pairs):
             alpha = np.dot(self.sigma[i],w)
             beta = np.dot(self.mu[i],v)
@@ -807,8 +836,10 @@ class LMadjointBroydenB(object):
             alpha -= beta*self.sigma[i]
         # end for 
         identity_term = np.zeros(self.n_dense) + alpha[:self.min_dim]
-        TR1_corr = (np.dot(alpha, self.sigma_bar)/self.mu_bar.sum())*self.mu_bar
-        v += identity_term + TR1_corr
+        # TR1_corr = (np.dot(alpha, self.sigma_bar)/self.mu_bar.sum())*self.mu_bar
+        # v += identity_term + TR1_corr
+        ABC_corr = np.dot(alpha,self.sigma_bar)*self.mu_bar
+        v += identity_term + ABC_corr
         return v
 
 
