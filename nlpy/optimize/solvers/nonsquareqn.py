@@ -11,6 +11,7 @@ import numpy as np
 import numpy.linalg
 import logging
 import sys
+import pdb
 
 from mpi4py import MPI
 
@@ -640,16 +641,14 @@ class TR1B(NonsquareQuasiNewton):
             
 
 
-class LMadjointBroydenA(object):
+class LMadjointBroydenB(object):
     """
     This class provides a limited-memory implementation of the adjoint Broyden 
-    A update. Because this class requires only a small amount of memory, no 
+    B update. Because this class requires only a small amount of memory, no 
     MPI constructs are needed to evaluate matrix-vector products.
-
-    ** not yet implemented **
     """
 
-    def __init__(self, m, n, x, vecfunc, jprod, jtprod, **kwargs):
+    def __init__(self, m, n, x, vecfunc, jprod, jtprod, npairs=5, **kwargs):
         """
         Arguments:
         m = Number of rows of approximation matrix
@@ -682,6 +681,11 @@ class LMadjointBroydenA(object):
         self.sparse_index = kwargs.get('sparse_index',m)
         self.m_dense = self.sparse_index
         self.n_dense = self.slack_index
+        self.min_dim = min(self.m_dense,self.n_dense)
+
+        self.init_diag = np.ones(self.min_dim)
+        self.beta = 3
+        self.diag_eps = 1e-6
 
         # Initial function values (uninitialized at start)
         self._vecfunc = np.zeros(m)
@@ -694,9 +698,17 @@ class LMadjointBroydenA(object):
         self.numRMatVecs = 0
 
         # Storage space for vector pairs in the limited-memory approach
+        self.s = []
+        self.y = []
+        # self.sigma = [None]*npairs
+        # self.mu = [None]*npairs
         self.sigma = []
-        self.sigma_bar = []
-        self.q = []
+        self.mu = []
+        self.sigma_bar = np.zeros(self.m_dense)
+        self.mu_bar = np.zeros(self.n_dense)
+
+        self.npairs = npairs
+        self.stored_pairs = 0
 
         return
 
@@ -707,8 +719,77 @@ class LMadjointBroydenA(object):
         point new_x. This prototype is overwritten in subsequent types of 
         updates.
         """
-        # To Do
-        pass
+        self.x = new_x
+        slack = self.slack_index
+        sparse = self.sparse_index
+
+        # As = self.dense_matvec(new_s[:slack])
+        vecfunc_new = self.vecfunc(new_x)
+        new_y = vecfunc_new[:sparse] - self._vecfunc[:sparse]
+        self._vecfunc = vecfunc_new
+        # sparse_prod = self.jprod(self.x, new_s, sparse_only=True)
+        # new_y -= sparse_prod[:sparse]
+
+        # Update the initial guess for A based on the new point
+        self.compute_identity_correction()
+
+        # Note that sigmas are stored as unit vectors to improve accuracy
+        # sigma = new_y - As
+        sigma = new_y
+        sigma2 = numpy.dot(sigma, sigma)
+        if sigma2 > self.accept_threshold:
+            self.s.append(new_s.copy())
+            self.y.append(new_y.copy())
+            if len(self.s) > self.npairs:
+                del self.s[0]
+                del self.y[0]
+            else:
+                self.stored_pairs += 1
+            # end if
+
+            sigma_len = sigma2**0.5
+            sigma_unit = sigma/sigma_len
+            sigma_long = np.zeros(self.m)
+            sigma_long[:sparse] = sigma_unit
+            full_prod = self.jtprod(self.x, sigma_long)
+            sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            mu = full_prod[:slack] - sparse_prod[:slack]
+
+            # Attach sigma and mu to the lists of stored vectors
+            self.sigma.append(sigma_unit.copy())
+            self.mu.append(mu.copy())
+            if len(self.sigma) > self.npairs:
+                del self.sigma[0]
+                del self.mu[0]
+            # else:
+            #     self.stored_pairs += 1
+            # end if
+
+            # # Recompute stored data for the matvec computation
+            # temp = self.stored_pairs
+            # self.stored_pairs = 0
+            # sigma_long = np.zeros(self.m)
+            # for i in xrange(temp):
+            #     # Compute unit-length sigma
+            #     As = self.dense_matvec(self.s[i][:slack])
+            #     ymAs = self.y[i][:sparse] - As
+            #     ymAs_len = np.dot(ymAs,ymAs)**0.5
+            #     self.sigma[i] = ymAs/ymAs_len
+
+            #     # Compute corresponding mu
+            #     sigma_long[:sparse] = self.sigma[i]            
+            #     ATsigma = self.dense_rmatvec(self.sigma[i])
+            #     full_prod = self.jtprod(self.x, sigma_long)
+            #     sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+            #     JTsigma = full_prod[:slack] - sparse_prod[:slack]
+            #     self.mu[i] = JTsigma - ATsigma
+
+            #     # Update number of stored pairs to correctly compute next A matvec
+            #     self.stored_pairs += 1
+            # # end for
+        # end if
+
+        return
 
 
     def restart(self, x):
@@ -718,9 +799,98 @@ class LMadjointBroydenA(object):
         self.x = x
         self._vecfunc = self.vecfunc(self.x)
 
-        # Loop over matrix-vector products and assemble a sparse matrix
+        # Initial condition based on TR1:
+        # General strategy, start with an identity block and add a TR1 update
+        # to product the correct matvecs with vectors of ones
+        # (similar to the scaling strategy for square quasi-Newton methods)
+        # ones_n = np.ones(self.n)
+        # ones_n[self.n_dense:] = 0.
+        # ones_m = np.ones(self.m)
+        # ones_m[self.m_dense:] = 0.
+
+        # full_for_prod = self.jprod(self.x, ones_n)
+        # full_adj_prod = self.jtprod(self.x, ones_m)
+
+        # self.sigma_bar = full_for_prod[:self.m_dense] - 1.0
+        # self.mu_bar = full_adj_prod[:self.n_dense] - 1.0
+
+        self.compute_initial_diagonal()
+        self.compute_identity_correction()
+
+        # # Initial condition based on adjoint Broyden C
+        # vecfunc_len = numpy.dot(self._vecfunc,self._vecfunc)**0.5
+        # if vecfunc_len > self.accept_threshold:
+        #     self.sigma_bar = self._vecfunc[:self.m_dense]/vecfunc_len
+        # else:
+        #     # Assume all constraints are the same value to get a nonzero 
+        #     # direction vector
+        #     self.sigma_bar = np.ones(self.m_dense) / self.m_dense**0.5
+        # sigma_long = np.zeros(self.m)
+        # sigma_long[:self.m_dense] = self.sigma_bar
+        # full_prod = self.jtprod(self.x, sigma_long)
+        # sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+        # self.mu_bar = full_prod[:self.n_dense] - sparse_prod[:self.n_dense]
+        # # Correct for initial estimate of identity block
+        # mu_long = np.zeros(self.n_dense)
+        # mu_long[:self.min_dim] = self.sigma_bar[:self.min_dim]
+        # self.mu_bar -= mu_long
 
         # Clear the set of additional stored vectors in the low-rank modification
+        self.s = []
+        self.y = []
+        self.stored_pairs = 0
+        return
+
+
+    def compute_initial_diagonal(self):
+        """
+        Compute an estimate of the initial diagonal to seed this approximation.
+
+        The initial diagonal comes from estimating the diagonal elements of 
+        J'J, where J is the Jacobian of constraints with respect to decision 
+        variables. The diagonal elements corresponding to slack variables 
+        remain as an identity block.
+        """
+        # Safety check that product functions are defined
+        if self.jprod == None or self.jtprod == None:
+            return
+
+        # More complicated schemes extract the main diagonal from a banded approximation
+        for i in xrange(self.beta):
+            # ind_set = numpy.arange(i,self.n,self.beta)
+            range_arr = numpy.arange(self.n)
+            binary_arr = numpy.where(range_arr % self.beta == i, 1, 0)
+            binary_arr[self.slack_index:] = 0.
+            Jv = self.jprod(self.x, binary_arr)
+            JTJv = self.jtprod(self.x, Jv)
+            for j in xrange(self.min_dim):
+                self.init_diag[j] = max(abs(JTJv[j]),self.diag_eps)**0.5
+
+        return
+
+
+    def compute_identity_correction(self):
+        """
+        A convenience routine to recompute the correction term for an 
+        initial guess of an identity matrix. This correction uses only the 
+        vector function value and is based on adjoint Broyden C.
+        """
+        vecfunc_len2 = numpy.dot(self._vecfunc,self._vecfunc)
+        if vecfunc_len2 > self.accept_threshold:
+            self.sigma_bar = self._vecfunc[:self.m_dense]/vecfunc_len2**0.5
+        else:
+            # Assume all constraints are the same value to get a nonzero 
+            # direction vector
+            self.sigma_bar = np.ones(self.m_dense) / self.m_dense**0.5
+        sigma_long = np.zeros(self.m)
+        sigma_long[:self.m_dense] = self.sigma_bar
+        full_prod = self.jtprod(self.x, sigma_long)
+        sparse_prod = self.jtprod(self.x, sigma_long, sparse_only=True)
+        self.mu_bar = full_prod[:self.n_dense] - sparse_prod[:self.n_dense]
+        # Correct for initial estimate of identity block
+        mu_long = np.zeros(self.n_dense)
+        mu_long[:self.min_dim] = self.sigma_bar[:self.min_dim]*self.init_diag
+        self.mu_bar -= mu_long
 
         return
 
@@ -729,10 +899,20 @@ class LMadjointBroydenA(object):
         """
         Compute the matrix-vector product with the dense block approximation.
         """
-        w = self.A_sparse*v
-        for i in xrange(self.stored_pairs):
-            w += self.sigma[i]*np.dot(self.sigma_bar[i],v) - self.sigma[i]*np.dot(self.sigma[i],w)
+        # pdb.set_trace()
+        identity_term = np.zeros(self.m_dense) 
+        identity_term[:self.min_dim] += self.init_diag*v[:self.min_dim]
+        # TR1_corr = (np.dot(v, self.mu_bar)/self.mu_bar.sum())*self.sigma_bar
+        # w = identity_term + TR1_corr
+        ABC_corr = np.dot(self.mu_bar,v)*self.sigma_bar
+        w = identity_term + ABC_corr
+        # for i in xrange(self.stored_pairs):
+        #     alpha = np.dot(self.sigma[i],w)
+        #     beta = np.dot(self.mu[i],v)
+        #     w += (beta - alpha)*self.sigma[i]
         # end for 
+        for i in xrange(self.stored_pairs):
+            w += np.dot(self.mu[i],v)*self.sigma[i]
         return w 
 
 
@@ -741,11 +921,24 @@ class LMadjointBroydenA(object):
         Compute the transpose matrix-vector product with the dense block 
         approximation.
         """
-        v = self.A_sparse.T*w 
+        # v = np.zeros(self.n_dense)
+        # alpha = w
+        # for i in xrange(self.stored_pairs-1,-1,-1):
+        #     beta = np.dot(alpha, self.sigma[i])
+        #     v += beta*self.mu[i]
+        #     alpha -= beta*self.sigma[i]
+        # # end for 
+        # identity_term = np.zeros(self.n_dense) + alpha[:self.min_dim]
+        # # TR1_corr = (np.dot(alpha, self.sigma_bar)/self.mu_bar.sum())*self.mu_bar
+        # # v += identity_term + TR1_corr
+        # ABC_corr = np.dot(alpha,self.sigma_bar)*self.mu_bar
+        # v += identity_term + ABC_corr
+        identity_term = np.zeros(self.n_dense) 
+        identity_term += self.init_diag*w[:self.min_dim]
+        ABC_corr = np.dot(w,self.sigma_bar)*self.mu_bar
+        v = identity_term + ABC_corr
         for i in xrange(self.stored_pairs):
-            k = np.dot(self.sigma[i],w)
-            v += self.sigma_bar[i]*np.dot(self.sigma[i],w) - k*self.q[i]
-        # end for 
+            v += np.dot(w,self.sigma[i])*self.mu[i]
         return v
 
 
