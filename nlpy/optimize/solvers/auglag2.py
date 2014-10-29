@@ -39,6 +39,7 @@ from nlpy.optimize.tr.trustregion import TrustRegionBQP as TRSolver
 from nlpy.tools.exceptions import UserExitRequest
 from nlpy.tools.utils import where
 from nlpy.tools.timing import cputime
+from nlpy.tools.norms import norm2
 
 
 class AugmentedLagrangian(NLPModel):
@@ -107,7 +108,14 @@ class AugmentedLagrangian(NLPModel):
         """
         nlp = self.nlp
         J = nlp.jac(x)
-        lgrad = nlp.grad(x) - J.T * self.pi
+        # Compute the length of the constraint vector to improve the 
+        # conditioning of the matvec
+        pi_norm = norm2(self.pi)
+        if pi_norm > 1.e-20:
+            pi_vec = self.pi/pi_norm
+            lgrad = nlp.grad(x) - pi_norm*(J.T * pi_vec)
+        else:
+            lgrad = nlp.grad(x) - J.T * self.pi
         return lgrad
 
 
@@ -118,7 +126,14 @@ class AugmentedLagrangian(NLPModel):
         nlp = self.nlp
         J = nlp.jac(x)
         cons = nlp.cons(x)
-        igrad = J.T * cons
+        # Compute the length of the constraint vector to improve the 
+        # conditioning of the matvec
+        cons_norm = norm2(cons)
+        if cons_norm > 1.e-20:
+            cons_vec = cons/cons_norm
+            igrad = cons_norm*(J.T * cons_vec)
+        else:
+            igrad = J.T * cons
         return igrad
 
 
