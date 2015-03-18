@@ -288,7 +288,8 @@ class SBMINFramework(object):
             # Iteratively minimize the quadratic model in the trust region
             #          m(d) = <g, d> + 1/2 <d, Hd>
             #     s.t.     ll <= d <= uu
-            qp = TrustBQPModel(nlp, self.x, self.TR.Delta, self.hprod, gk=self.g)
+            # qp = TrustBQPModel(nlp, self.x, self.TR.Delta, self.hprod, gk=self.g)
+            qp = TrustBSTCGModel(nlp, self.x, self.TR.Delta, self.hprod, gk=self.g)
 
             bqptol = max(1.0e-6, min(0.1 * bqptol, sqrt(self.pgnorm)))
 
@@ -702,6 +703,75 @@ class TrustBQPModel(NLPModel):
 
         Lvar = np.maximum(nlp.Lvar - xk, -delta)
         Uvar = np.minimum(nlp.Uvar - xk, delta)
+
+        NLPModel.__init__(self, n=nlp.n, m=nlp.m, name='TrustRegionSubproblem',
+                          Lvar=Lvar, Uvar=Uvar)
+        self.nlp = nlp
+        self.x0 = np.zeros(self.nlp.n)
+        self.xk = xk.copy()
+        self.delta = delta
+        self.gk = kwargs.get('gk', None)
+        if self.gk == None:
+            self.gk = self.nlp.grad(self.xk)
+
+        # private values
+        self._x = np.infty * np.ones(self.nlp.n)
+        self._Hx = None
+        self._hprod = hprod
+
+    def obj(self, x, **kwargs):
+        if not (self._x == x).all():
+            self._x = x.copy()
+            self._Hx = None
+        if self._Hx == None:
+            self._Hx = self._hprod(self.xk, None, x)
+
+        Hx = self._Hx.copy()
+        Hx *= 0.5
+        Hx += self.gk
+        return np.dot(x, Hx)
+
+    def grad(self, x, **kwargs):
+        if not (self._x == x).all():
+            self._x = x.copy()
+            self._Hx = None
+        if self._Hx == None:
+            self._Hx = self._hprod(self.xk, None, x)
+
+        g = self._Hx.copy()
+        g += self.gk
+        return g
+
+    def objgrad(self, x, **kwargs):
+        Hx = self._hprod(self.xk, None, x)
+        g = self.gk + Hx
+        Hx *= 0.5
+        Hx += self.gk
+        q = np.dot(x, Hx)
+        return (q, g)
+
+    def hprod(self, x, pi, p, **kwargs):
+        return self._hprod(self.xk, None, p)
+
+
+
+class TrustBSTCGModel(NLPModel):
+    """
+    Class for defining a Model to pass to BQP solver:
+                min     m(xk + s) = g's + 1/2 s'Hs
+                s.t.       l <= xk + s <= u
+                           || s ||_2  <= delta
+
+    where `g` is the gradient evaluated at xk
+    and `H` is  the Hessian evaluated at xk.
+    """
+
+    def __init__(self, nlp, xk, delta, hprod, **kwargs):
+
+        # Lvar = np.maximum(nlp.Lvar - xk, -delta)
+        # Uvar = np.minimum(nlp.Uvar - xk, delta)
+        Lvar = nlp.Lvar - xk
+        Uvar = nlp.Uvar - xk
 
         NLPModel.__init__(self, n=nlp.n, m=nlp.m, name='TrustRegionSubproblem',
                           Lvar=Lvar, Uvar=Uvar)

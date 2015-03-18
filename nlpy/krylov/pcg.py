@@ -122,7 +122,7 @@ class TruncatedCG:
         """
 
         radius  = kwargs.get('radius', None)
-        abstol  = kwargs.get('absol', 1.0e-8)
+        abstol  = kwargs.get('abstol', 1.0e-8)
         reltol  = kwargs.get('reltol', 1.0e-6)
         maxiter = kwargs.get('maxiter', 50*self.n)
         prec    = kwargs.get('prec', lambda v: v)

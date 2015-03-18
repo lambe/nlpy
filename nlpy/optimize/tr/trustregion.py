@@ -8,6 +8,7 @@ from nlpy.krylov.ppcg import ProjectedCG
 import numpy as np
 import nlpy.tools.norms as norms
 from nlpy.optimize.solvers.bqp2 import BQP
+from nlpy.optimize.solvers.bstcg import BSTCG
 
 __docformat__ = 'restructuredtext'
 
@@ -263,6 +264,55 @@ class TrustRegionBQP(TrustRegionSolver):
         Toraldo.
         """
         self.bqpSolver.solve(use_q_conv=True, use_x_conv=True, maxiter=50, **kwargs)
+        self.niter = self.bqpSolver.niter
+        self.stepNorm = norms.norm_infty(self.bqpSolver.x)
+        self.step = self.bqpSolver.x
+        self.m = self.bqpSolver.qval
+        return
+
+
+class TrustRegionBSTCG(TrustRegionSolver):
+    """
+    Instantiate a trust-region subproblem solver based on a matrix-free
+    active-set method for bound-constrained quadratic programming. The goal 
+    of this solver is to combine the Steihaug-Toint CG algorithm with a 
+    projected line search so that bound constraints can be treated 
+    explicitly. 
+
+    The trust-region subproblem has the form
+
+    minimize   q(d)
+    subject to ||d||_2 <= ∆,
+        d_L <= d <= d_U
+
+    where q(d) is a quadratic function of the n-vector d, i.e., q has the
+    general form q(d) = g'd + 1/2 d'Hd,
+
+    where `g` is a n-vector typically interpreted as the gradient of some
+    merit function and `H` is a real symmetric n-by-n matrix. Note that `H`
+    need not be positive semi-definite.
+
+    For more information on trust-region methods, see
+
+    A. R. Conn, N. I. M. Gould and Ph. L. Toint, Trust-Region Methods,
+    MP01 MPS-SIAM Series on Optimization, 2000.
+    """
+
+    def __init__(self, bqp, g, **kwargs):
+
+        TrustRegionSolver.__init__(self, g, **kwargs)
+        self.bqpSolver = BSTCG(bqp, **kwargs)
+        self.niter = 0
+        self.stepNorm = 0.0
+        self.step = None
+        self.m = None  # Model value at candidate solution
+
+    def Solve(self, **kwargs):
+        """
+        Solve trust-region subproblem using the active-set method of More and
+        Toraldo.
+        """
+        self.bqpSolver.solve(**kwargs)
         self.niter = self.bqpSolver.niter
         self.stepNorm = norms.norm_infty(self.bqpSolver.x)
         self.step = self.bqpSolver.x

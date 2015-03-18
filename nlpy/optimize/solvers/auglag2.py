@@ -35,7 +35,8 @@ from nlpy.optimize.solvers.nonsquareqn import LMadjointBroydenB
 from nlpy.krylov.linop import SimpleLinearOperator
 from nlpy.krylov.linop import ReducedLinearOperator
 from nlpy.optimize.tr.trustregion import TrustRegionFramework as TR
-from nlpy.optimize.tr.trustregion import TrustRegionBQP as TRSolver
+# from nlpy.optimize.tr.trustregion import TrustRegionBQP as TRSolver
+from nlpy.optimize.tr.trustregion import TrustRegionBSTCG as TRSolver
 from nlpy.tools.exceptions import UserExitRequest
 from nlpy.tools.utils import where
 from nlpy.tools.timing import cputime
