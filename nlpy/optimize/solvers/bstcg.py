@@ -229,31 +229,31 @@ class BSTCG(object):
                 self.log.debug('Interpolation with optimal step = %7.1e' % step)
                 self.log.debug('Interpolated q = %7.12e' % q_xps)
             # end if
-        else:
-            # The initial step yields sufficient decrease. See if we can
-            # find a larger step with larger decrease.
-            if step < bk_max:
-                increase = True
-                x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
-                q_ok = q_xps
-                q_prev = q_xps
-                while increase and step <= bk_max:
-                    step *= 6
-                    xps = self.project(x + step * d)
-                    q_xps = qp.obj(xps)
-                    self.log.debug('  Extrapolating with step = %7.1e q = %7.12e' % (step, q_xps))
-                    slope = np.dot(g, xps - x)
-                    increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
-                    if increase:
-                        x_ok = xps.copy()
-                        q_ok = q_xps
-                        q_prev = q_xps
-                    # end if
-                # end while
-                xps = x_ok.copy()
-                q_xps = q_ok
-            # end if
-        #end if
+        # else:
+        #     # The initial step yields sufficient decrease. See if we can
+        #     # find a larger step with larger decrease.
+        #     if step < bk_max:
+        #         increase = True
+        #         x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
+        #         q_ok = q_xps
+        #         q_prev = q_xps
+        #         while increase and step <= bk_max:
+        #             step *= 6
+        #             xps = self.project(x + step * d)
+        #             q_xps = qp.obj(xps)
+        #             self.log.debug('  Extrapolating with step = %7.1e q = %7.12e' % (step, q_xps))
+        #             slope = np.dot(g, xps - x)
+        #             increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
+        #             if increase:
+        #                 x_ok = xps.copy()
+        #                 q_ok = q_xps
+        #                 q_prev = q_xps
+        #             # end if
+        #         # end while
+        #         xps = x_ok.copy()
+        #         q_xps = q_ok
+        #     # end if
+        # #end if
 
         if q_xps > qval:
             # raise ValueError('Line search returning a worse function value.')

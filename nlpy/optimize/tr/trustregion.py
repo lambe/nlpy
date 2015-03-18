@@ -309,12 +309,12 @@ class TrustRegionBSTCG(TrustRegionSolver):
 
     def Solve(self, **kwargs):
         """
-        Solve trust-region subproblem using the active-set method of More and
-        Toraldo.
+        Solve trust-region subproblem.
         """
         self.bqpSolver.solve(**kwargs)
         self.niter = self.bqpSolver.niter
-        self.stepNorm = norms.norm_infty(self.bqpSolver.x)
+        # self.stepNorm = norms.norm_infty(self.bqpSolver.x)
+        self.stepNorm = norms.norm2(self.bqpSolver.x)
         self.step = self.bqpSolver.x
         self.m = self.bqpSolver.qval
         return
