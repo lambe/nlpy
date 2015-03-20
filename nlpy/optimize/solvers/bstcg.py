@@ -149,12 +149,12 @@ class BSTCG(object):
         return (bk_min, bk_max)
 
 
-    def projected_linesearch(self, x, g, d, qval, step=1.0, **kwargs):
+    def projected_gradient(self, x, g, d, qval, step=1.0, **kwargs):
         """
-        Perform an Armijo-like projected linesearch in the direction d.
-        Here, x is the current iterate, g is the gradient at x,
-        d is the search direction, qval is q(x) and
-        step is the initial steplength.
+        Perform an Armijo-like projected linesearch in the direction d. 
+        Here, x is the current iterate, g is the gradient at x, d is the 
+        search direction (projected negative gradient), qval is 
+        q(x), and step is the initial steplength.
         """
 
         check_feasible = kwargs.get('check_feasible', True)
@@ -169,22 +169,28 @@ class BSTCG(object):
             raise ValueError('Not a descent direction.')
 
         qp = self.qp
+        radius = qp.delta
         factor = self.armijo_factor
 
         # Obtain stepsize to nearest and farthest breakpoints.
         bk_min, bk_max = self.breakpoints(x, d)
 
-        # if bk_min <= 0.0:
-        #     raise ValueError('First breakpoint is zero.')
+        if bk_min <= 0.0:
+            raise ValueError('First breakpoint is zero.')
 
         self.log.debug('Projected linesearch with initial q = %7.12e' % qval)
 
-        if kwargs.get('use_bk_min', False):
-            step = bk_min
-
         xps = self.project(x + step * d)
+        # Keep the step inside the TR radius
+        if np.linalg.norm(xps) > radius:
+            while np.linalg.norm(xps) > radius:
+                step /= 6
+                xps = self.project(x + step * d)
+
         q_xps = qp.obj(xps)
         slope = np.dot(g, xps - x)
+
+        self.log.debug('After bound and trust-region projection, q = %7.12e' % q_xps)
 
         if slope >= 0:   # May happen after a projection.
             step = min(step, bk_min)
@@ -229,37 +235,83 @@ class BSTCG(object):
                 self.log.debug('Interpolation with optimal step = %7.1e' % step)
                 self.log.debug('Interpolated q = %7.12e' % q_xps)
             # end if
-        # else:
-        #     # The initial step yields sufficient decrease. See if we can
-        #     # find a larger step with larger decrease.
-        #     if step < bk_max:
-        #         increase = True
-        #         x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
-        #         q_ok = q_xps
-        #         q_prev = q_xps
-        #         while increase and step <= bk_max:
-        #             step *= 6
-        #             xps = self.project(x + step * d)
-        #             q_xps = qp.obj(xps)
-        #             self.log.debug('  Extrapolating with step = %7.1e q = %7.12e' % (step, q_xps))
-        #             slope = np.dot(g, xps - x)
-        #             increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
-        #             if increase:
-        #                 x_ok = xps.copy()
-        #                 q_ok = q_xps
-        #                 q_prev = q_xps
-        #             # end if
-        #         # end while
-        #         xps = x_ok.copy()
-        #         q_xps = q_ok
-        #     # end if
-        # #end if
+        else:
+            # The initial step yields sufficient decrease. See if we can
+            # find a larger step with larger decrease, while staying inside 
+            # the trust region.
+            if step < bk_max:
+                increase = True
+                x_ok = xps.copy()  # Most recent iterate satisfying Armijo.
+                q_ok = q_xps
+                q_prev = q_xps
+                while increase and step <= bk_max:
+                    step *= 6
+                    xps = self.project(x + step * d)
+                    q_xps = qp.obj(xps)
+                    self.log.debug('  Extrapolating with step = %7.1e q = %7.12e' % (step, q_xps))
+                    slope = np.dot(g, xps - x)
+                    increase = slope < 0 and (q_xps < qval + factor * slope) and q_xps <= q_prev
+                    # An extra condition to make sure updated point lies within TR
+                    increase = increase and np.linalg.norm(xps) <= radius
+                    if increase:
+                        x_ok = xps.copy()
+                        q_ok = q_xps
+                        q_prev = q_xps
+                    # end if
+                # end while
+                xps = x_ok.copy()
+                q_xps = q_ok
+            # end if
+        #end if
 
         if q_xps > qval:
             # raise ValueError('Line search returning a worse function value.')
             self.log.debug('Line search returning a worse function value. Exiting linesearch.')
             self.log.debug('Difference = %7.12e' % (q_xps - qval))
             return (x, qval, 0.0) # In the rare case that the line search fails
+        self.log.debug('Projected gradient ends with q = %7.12e' % q_xps)
+
+        return (xps, q_xps, step)
+
+
+    def projected_backtracking_linesearch(self, x_CP, d, q_CP):
+        """
+        Perform a backtracking line search in the direction d until 
+        a sufficient decrease in q is found, as measured by q_CP.
+
+        This line search starts from the Cauchy point of the trust 
+        region and only looks for a sufficient decrease in q, 
+        rather than looking for an appropriate slope. ** This is 
+        different from the line search used in the projected gradient 
+        part of the algorithm. **
+        """
+
+        qp = self.qp
+        radius = qp.delta
+        factor = self.armijo_factor
+
+        self.log.debug('Projected linesearch with initial q = %7.12e' % q_CP)
+
+        step = 1.0
+        xps = self.project(x_CP + step * d)
+        # Keep the step inside the TR radius
+        if np.linalg.norm(xps) > radius:
+            while np.linalg.norm(xps) > radius:
+                step /= 6.
+                xps = self.project(x_CP + step * d)
+        q_xps = qp.obj(xps)
+
+        suff_decrease = (q_xps < factor * q_CP)
+        if not suff_decrease:
+            while not suff_decrease:
+                step /= 6.
+                xps = self.project(x_CP + step * d)
+                q_xps = qp.obj(xps)
+                self.log.debug('  Backtracking with step = %7.1e q = %7.12e' % (step, q_xps))
+                suff_decrease = (q_xps < factor * q_CP)
+            # end while
+        # end if
+
         self.log.debug('Projected linesearch ends with q = %7.12e' % q_xps)
 
         return (xps, q_xps, step)
@@ -296,16 +348,22 @@ class BSTCG(object):
         self.log.info(self.hline)
         self.log.info(self.format0 % (iter, 0.0, pgNorm, ''))
 
+        # First, identify Cauchy point with a projected line search
+        x_CP, q_CP, step = self.projected_gradient(x, g, -pg, qval)
+        lower_CP, upper_CP = self.get_active_set(x_CP)
+        g_CP = qp.grad(x_CP)
+        pg_CP = self.pgrad(x_CP, g=g_CP, active_set=(lower_CP,upper_CP))
+
         # Solve problem with TruncatedCG
-        # First, identify the set of free variables (zero bound multipliers)
+        # For this solver, we use the estimate of the active set provided 
+        # by the initial point, not the Cauchy point
         on_bound = np.concatenate((lower,upper))
         zero_grad = where(pg == 0.)
-        fixed_vars = np.intersect1d(on_bound,zero_grad)
+        fixed_vars = np.intersect1d(on_bound,zero_grad)        
         free_vars = np.setdiff1d(np.arange(n, dtype=np.int), fixed_vars)
 
         # Construct reduced Hessian and gradient
         ZHZ = ReducedHessian(self.H, free_vars)
-        # ** could we just use pg? **
         Zg  = g[free_vars]
 
         # Call TruncatedCG to solve the QP, ignoring inactive bounds
@@ -322,19 +380,21 @@ class BSTCG(object):
         d[free_vars] = cg.step
 
         if cg.infDescent and cg.step.size != 0 and cg.dir.size != 0:
-            # msg  = 'iter :%d  Negative curvature detected' % iter
-            # msg += ' (%d its)' % cg.niter
-            # self.log.debug(msg)
+            # Use the negative curvature direction as the search direction
+            # Start the search from the Cauchy point
             nc_dir = np.zeros(n)
             nc_dir[free_vars] = cg.dir
-            x, qval, step = self.projected_linesearch(x, g, nc_dir, qval)
+            x, qval, step = self.projected_backtracking_linesearch(x_CP, nc_dir, q_CP)
         else:
-            x, qval, step = self.projected_linesearch(x, g, d, qval)
+            # Use the progress from the Cauchy point as the search direction
+            cp_diff = d - x_CP
+            x, qval, step = self.projected_backtracking_linesearch(x_CP, cp_diff, q_CP)
 
         # Update the current point
         lower, upper = self.get_active_set(x)
         g = qp.grad(x)
         pg = self.pgrad(x, g=g, active_set=(lower, upper))
+
         pgNorm = np.linalg.norm(pg)
         self.log.info(self.format % (iter, qval, pgNorm, cg.niter))
 

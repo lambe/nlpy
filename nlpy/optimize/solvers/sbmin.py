@@ -294,7 +294,7 @@ class SBMINFramework(object):
             bqptol = max(1.0e-6, min(0.1 * bqptol, sqrt(self.pgnorm)))
 
             self.solver = self.TrSolver(qp, qp.grad, use_prec=self.prec)
-            self.solver.Solve(reltol=bqptol)
+            self.solver.Solve(abstol=self.abstol, reltol=bqptol)
 
             step = self.solver.step
             stepnorm = self.solver.stepNorm

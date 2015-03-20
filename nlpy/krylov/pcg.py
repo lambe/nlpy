@@ -136,7 +136,8 @@ class TruncatedCG:
         r = g.copy()
         if 's0' in kwargs:
             s = kwargs['s0']
-            snorm2 = np.linalg.norm(s)
+            # snorm2 = np.linalg.norm(s)
+            snorm2 = np.dot(s,s)
             Hs = H * s
             r += Hs                 # r = g + H s0
             Hs *= 0.5
